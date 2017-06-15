@@ -8,7 +8,7 @@ import hashlib
 import os
 from binascii import crc32
 
-from unrardll import BadPassword, PasswordRequired, comment, extract, headers, names
+from unrardll import BadPassword, PasswordRequired, comment, extract, headers, names, extract_member
 
 from . import TempDir, TestCase, base
 
@@ -93,6 +93,10 @@ class BasicTests(TestCase):
             raw = open(os.path.join(tdir, h['filename']), 'rb').read()
             self.ae(len(raw), h['unpack_size'])
             self.ae(hashlib.sha1(raw).hexdigest(), 'a9fc6a11d000044f17fcdf65816348ce0be3b145')
+
+    def test_extract_member(self):
+        self.ae(extract_member(simple_rar, lambda h: h['filename'] == 'one.txt'), sr_data['one.txt'])
+        self.assertIsNone(extract_member(simple_rar, lambda h: False))
 
     def test_memory_leaks(self):
         import gc

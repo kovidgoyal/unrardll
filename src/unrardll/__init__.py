@@ -125,9 +125,9 @@ class BadPassword(PasswordError):
         ValueError.__init__(self, 'The specified password is incorrect for: %r' % archive_path)
 
 
-def do_func(func, archive_path, f, c):
+def do_func(func, archive_path, f, c, *args):
     try:
-        return func(f)
+        return func(f, *args)
     except unrar.UNRARError as e:
         if e.message == 'ERAR_MISSING_PASSWORD':
             raise PasswordRequired(archive_path)
@@ -207,7 +207,7 @@ def extract(archive_path, location, password=None, verify_data=False):
     seen = set()
     crc_map = defaultdict(lambda: 0)
     while True:
-        h = unrar.read_next_header(f)
+        h = do_func(unrar.read_next_header, archive_path, f, c)
         if h is None:
             break
         filename = h['filename']
@@ -246,3 +246,25 @@ def extract(archive_path, location, password=None, verify_data=False):
     del f
     if verify_data:
         verify(archive_path, crc_map, password=password)
+
+
+def extract_member(archive_path, predicate, password=None, verify_data=False):
+    c = ExtractCallback(pw=password, verify_data=verify_data)
+    archive_path = type('')(archive_path)
+    f = unrar.open_archive(archive_path, c, unrar.RAR_OM_EXTRACT)
+    while True:
+        h = do_func(unrar.read_next_header, archive_path, f, c)
+        if h is None:
+            return
+        if h['is_dir'] or h['is_symlink'] or not predicate(h):
+            do_func(unrar.process_file, archive_path, f, c, unrar.RAR_SKIP)
+        else:
+            buf = []
+            c.reset(write=buf.append)
+            do_func(unrar.process_file, archive_path, f, c)
+            break
+    del f
+    crc_map = {h['filename']: c.crc}
+    if verify_data:
+        verify(archive_path, crc_map, password=password)
+    return b''.join(buf)

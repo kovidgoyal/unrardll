@@ -298,9 +298,13 @@ read_next_header(PyObject *self, PyObject *file_capsule) {
 
 
 static PyObject*
-process_file(PyObject *self, PyObject *file_capsule) {
+process_file(PyObject *self, PyObject *args) {
+    int operation = RAR_TEST;
+    PyObject *file_capsule;
+
+    if (!PyArg_ParseTuple(args, "O|i", &file_capsule, &operation)) return NULL;
     PartialDataSet *data = FROM_CAPSULE(file_capsule);
-    unsigned int retval = RARProcessFileW((HANDLE)data, RAR_TEST, NULL, NULL);
+    unsigned int retval = RARProcessFileW((HANDLE)data, operation, NULL, NULL);
     if (retval == ERAR_SUCCESS) { Py_RETURN_NONE; }
     convert_rar_error(retval);
     return NULL;
@@ -338,8 +342,8 @@ static PyMethodDef methods[] = {
         "read_next_header(capsule)\n\nRead the next header from the RAR archive"
     },
 
-    {"process_file", (PyCFunction)process_file, METH_O,
-        "process_file(capsule)\n\nProcess the current file. The callback registered in open_archive will be called."
+    {"process_file", (PyCFunction)process_file, METH_VARARGS,
+        "process_file(capsule, operation=RAR_TEST)\n\nProcess the current file. The callback registered in open_archive will be called."
     },
 
     {NULL, NULL}
@@ -404,6 +408,9 @@ initunrar(void)
     if (PyModule_AddIntMacro(module, RAR_OM_LIST) != 0) { INITERROR; }
     if (PyModule_AddIntMacro(module, RAR_OM_EXTRACT) != 0) { INITERROR; }
     if (PyModule_AddIntMacro(module, RAR_OM_LIST_INCSPLIT) != 0) { INITERROR; }
+    if (PyModule_AddIntMacro(module, RAR_SKIP) != 0) { INITERROR; }
+    if (PyModule_AddIntMacro(module, RAR_EXTRACT) != 0) { INITERROR; }
+    if (PyModule_AddIntMacro(module, RAR_TEST) != 0) { INITERROR; }
 
 #if PY_MAJOR_VERSION >= 3
     return module;
