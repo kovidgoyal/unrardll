@@ -260,6 +260,9 @@ header_to_python(RARHeaderDataEx *fh, PartialDataSet *data) {
     AVAL("file_attr", "I", fh->FileAttr);
     AVAL("is_dir", "O", data->Arc.IsArcDir() ? Py_True : Py_False);
     AVAL("is_symlink", "O", (IsLink(fh->FileAttr)) ? Py_True : Py_False);
+    // AVAL("atime", "k", combine(fh->AtimeHigh, fh->AtimeLow));
+    // AVAL("ctime", "k", combine(fh->CtimeHigh, fh->CtimeLow));
+    // AVAL("mtime", "k", combine(fh->MtimeHigh, fh->MtimeLow));
     AVAL("redir_type", "I", fh->RedirType);
     if (fh->RedirNameSize > 0) {
         filename = wchar_to_unicode(fh->RedirName, fh->RedirNameSize);

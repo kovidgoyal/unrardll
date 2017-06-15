@@ -48,8 +48,10 @@ class BasicTests(TestCase):
             data = {}
             for dirpath, dirnames, filenames in os.walk(tdir):
                 for f in filenames:
-                    f = os.path.join(dirpath, f)
-                    data[os.path.relpath(f, tdir).replace(os.sep, '/')] = open(f, 'rb').read()
+                    path = os.path.join(dirpath, f)
+                    data[os.path.relpath(path, tdir).replace(os.sep, '/')] = open(path, 'rb').read()
+                    if f == 'one.txt':
+                        self.ae(os.path.getmtime(path), 1098472879)
         q = {k: v for k, v in sr_data.items() if v}
         del q['symlink']
         self.ae(data, q)
