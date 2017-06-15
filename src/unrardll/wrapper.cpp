@@ -260,6 +260,12 @@ header_to_python(RARHeaderDataEx *fh, PartialDataSet *data) {
     AVAL("file_attr", "I", fh->FileAttr);
     AVAL("is_dir", "O", data->Arc.IsArcDir() ? Py_True : Py_False);
     AVAL("is_symlink", "O", (IsLink(fh->FileAttr)) ? Py_True : Py_False);
+    AVAL("redir_type", "I", fh->RedirType);
+    if (fh->RedirNameSize > 0) {
+        filename = wchar_to_unicode(fh->RedirName, fh->RedirNameSize);
+        if (!filename) goto error;
+        AVAL("redir_name", "N", filename);
+    }
 #undef AVAL
     return ans;
 error:
@@ -271,7 +277,7 @@ error:
 static PyObject*
 read_next_header(PyObject *self, PyObject *file_capsule) {
     PartialDataSet *data = FROM_CAPSULE(file_capsule);
-    static RARHeaderDataEx header = {0};
+    RARHeaderDataEx header = {0};  // Cannot be static as it has to be initialized to zero
     unsigned int retval = RARReadHeaderEx((HANDLE)data, &header);
 
     switch(retval) {

@@ -83,6 +83,14 @@ def safe_path(base, relpath):
     return path
 
 
+def is_safe_symlink(base, x):
+    base = os.path.normcase(base)
+    tgt = os.path.abspath(os.path.join(base, x))
+    ntgt = os.path.normcase(tgt)
+    extra = ntgt[len(base):]
+    return ntgt.startswith(base) and (not extra or extra[0] in (os.sep, '/'))
+
+
 def ensure_dir(path):
     try:
         os.makedirs(path)
@@ -138,7 +146,13 @@ def extract(archive_path, location):
                 # We ignore create directory errors since we dont
                 # care about missing empty dirs
         elif h['is_symlink']:
-            ensure_dir(os.path.dirname(dest))
+            syn = h.get('redir_name')
+            if syn and not iswindows:
+                # Only RAR 5 archives have a redir_name
+                syn_base = os.path.dirname(dest)
+                if is_safe_symlink(location, os.path.join(syn_base, syn)):
+                    ensure_dir(syn_base)
+                    os.symlink(h.get('redir_name'), dest)
         else:
             ensure_dir(os.path.dirname(dest))
             c.reset(local_open(dest, 'ab' if dest in seen else 'wb').write)
