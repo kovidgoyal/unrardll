@@ -15,7 +15,7 @@ RARDLL_VERSION = unrar.RARDllVersion
 
 
 def is_useful(h):
-    return not (h['is_label'] or h['is_directory'] or h['is_symlink'])
+    return not (h['is_dir'] or h['is_symlink'])
 
 
 class Callback(object):
@@ -27,13 +27,13 @@ class Callback(object):
         pass
 
 
-def names(archive_path):
+def names(archive_path, only_useful=False):
     c = Callback()
     f = unrar.open_archive(archive_path, c, False)
     while True:
         h = unrar.read_next_header(f)
         if h is None:
             break
-        if is_useful(h):
+        if not only_useful or is_useful(h):
             yield h['filename']
         unrar.process_file(f)

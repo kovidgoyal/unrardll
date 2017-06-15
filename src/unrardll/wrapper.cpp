@@ -130,7 +130,7 @@ unrar_callback(UINT msg, LPARAM user_data, LPARAM p1, LPARAM p2) {
             break;  // we only support unicode passwords, which is fine since unrar asks for those before trying ansi password
         case UCM_NEEDPASSWORDW:
             if (p2 > -1 && callback) {
-                PyObject *pw = PyObject_CallMethod(callback, "_get_password", NULL);
+                PyObject *pw = PyObject_CallMethod(callback, (char*)"_get_password", NULL);
                 if (pw) {
                     Py_ssize_t sz = unicode_to_wchar(pw, (wchar_t*)p1, p2);
                     Py_DECREF(pw);
@@ -141,9 +141,9 @@ unrar_callback(UINT msg, LPARAM user_data, LPARAM p1, LPARAM p2) {
         case UCM_PROCESSDATA:
             if (p2 > -1 && callback) {
 #if PY_MAJOR_VERSION >= 3
-                PyObject *pw = PyObject_CallMethod(callback, "_process_data", "y#", (char*)p1, (int)p2);
+                PyObject *pw = PyObject_CallMethod(callback, (char*)"_process_data", "y#", (char*)p1, (int)p2);
 #else
-                PyObject *pw = PyObject_CallMethod(callback, "_process_data", "s#", (char*)p1, (int)p2);
+                PyObject *pw = PyObject_CallMethod(callback, (char*)"_process_data", "s#", (char*)p1, (int)p2);
 #endif
                 ret = (pw && PyObject_IsTrue(pw)) ? 0 : -1;
                 Py_XDECREF(pw);
@@ -160,9 +160,9 @@ open_archive(PyObject *self, PyObject *args) {
     PyObject *path = NULL, *extract = NULL, *callback = NULL;
     RAROpenArchiveDataEx open_info = {0};
     PartialDataSet* rar_file = 0;
-    wchar_t pathbuf[NM] = {0};
+    wchar_t pathbuf[NM + 10] = {0};
 
-    if (!PyArg_ParseTuple(args, "O!OO", PyUnicode_Type, &path, &callback, &extract)) return NULL;
+    if (!PyArg_ParseTuple(args, "O!OO", &PyUnicode_Type, &path, &callback, &extract)) return NULL;
     if (unicode_to_wchar(path, pathbuf, sizeof(pathbuf) / sizeof(pathbuf[0])) < 0) return NULL;
     open_info.OpenMode = PyObject_IsTrue(extract) ? RAR_OM_EXTRACT : RAR_OM_LIST;
     open_info.Callback = unrar_callback;
@@ -183,7 +183,6 @@ open_archive(PyObject *self, PyObject *args) {
     }
 
 end:
-    free(open_info.ArcNameW);
     return encapsulate(rar_file);
 }
 

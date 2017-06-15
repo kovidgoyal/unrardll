@@ -4,7 +4,10 @@
 
 from __future__ import absolute_import, division, print_function, unicode_literals
 
+import os
 import unittest
+
+base = os.path.dirname(os.path.abspath(__file__))
 
 
 class TestCase(unittest.TestCase):

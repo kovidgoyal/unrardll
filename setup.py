@@ -76,6 +76,7 @@ class Test(Build):
         if self.dry_run:
             self.announce('skipping "test" (dry run)')
             return
+        sys.path.insert(0, self.build_lib)
         tests = find_tests()
         r = unittest.TextTestRunner
         result = r(verbosity=2).run(tests)
