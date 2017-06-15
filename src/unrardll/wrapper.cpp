@@ -264,6 +264,7 @@ header_to_python(RARHeaderDataEx *fh, PartialDataSet *data) {
     AVAL("method", "b", fh->Method);
     AVAL("file_attr", "I", fh->FileAttr);
     AVAL("is_dir", "O", data->Arc.IsArcDir() ? Py_True : Py_False);
+    AVAL("is_symlink", "O", (IsLink(fh->FileAttr)) ? Py_True : Py_False);
 #undef AVAL
     return ans;
 error:
