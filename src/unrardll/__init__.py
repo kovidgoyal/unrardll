@@ -124,9 +124,9 @@ class BadPassword(PasswordError):
         ValueError.__init__(self, 'The specified password is incorrect for: %r' % archive_path)
 
 
-def process_file(archive_path, f, c):
+def do_func(func, archive_path, f, c):
     try:
-        unrar.process_file(f)
+        return func(f)
     except unrar.UNRARError as e:
         if e.message == 'ERAR_MISSING_PASSWORD':
             raise PasswordRequired(archive_path)
@@ -139,11 +139,11 @@ def headers(archive_path, password=None):
     c = Callback(pw=password)
     f = unrar.open_archive(archive_path, c, False)
     while True:
-        h = unrar.read_next_header(f)
+        h = do_func(unrar.read_next_header, archive_path, f, c)
         if h is None:
             break
         yield h
-        process_file(archive_path, f, c)
+        do_func(unrar.process_file, archive_path, f, c)
         c.reset()
 
 
@@ -156,7 +156,7 @@ def names(archive_path, only_useful=False, password=None):
 def comment(archive_path):
     c = Callback()
     f = unrar.open_archive(archive_path, c, False)
-    return unrar.get_comment(f)
+    return do_func(unrar.get_comment, archive_path, f, c)
 
 
 class ExtractCallback(Callback):
@@ -204,7 +204,7 @@ def extract(archive_path, location, password=None):
             ensure_dir(os.path.dirname(dest))
             c.reset(local_open(dest, 'ab' if dest in seen else 'wb').write)
             extracted = True
-        process_file(archive_path, f, c)
+        do_func(unrar.process_file, archive_path, f, c)
         seen.add(dest)
         if extracted:
             c.reset(None)  # so that file is closed
