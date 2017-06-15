@@ -6,9 +6,9 @@ from __future__ import absolute_import, division, print_function, unicode_litera
 
 import os
 
-from unrardll import names, comment
+from unrardll import names, comment, extract
 
-from . import TestCase, base
+from . import TestCase, base, TempDir
 
 simple_rar = os.path.join(base, 'simple.rar')
 sr_data = {
@@ -41,3 +41,36 @@ class BasicTests(TestCase):
         with open(simple_rar, 'rb') as f:
             self.ae(comment(simple_rar), 'some comment\n')
             f.close()
+
+    def test_extract(self):
+        with TempDir() as tdir:
+            extract(simple_rar, tdir)
+            data = {}
+            for dirpath, dirnames, filenames in os.walk(tdir):
+                for f in filenames:
+                    f = os.path.join(dirpath, f)
+                    data[os.path.relpath(f, tdir).replace(os.sep, '/')] = open(f, 'rb').read()
+        self.ae(data, sr_data)
+
+    # def test_leaks(self):
+    #     import gc
+    #     del f
+    #     for i in xrange(3):
+    #         gc.collect()
+    #
+    #     def get_mem_use(num):
+    #         start = memory()
+    #         s = SaveStream(stream)
+    #         for i in xrange(num):
+    #             with s:
+    #                 f = RARFile(stream)
+    #                 f.test()
+    #         del f, s
+    #         for i in xrange(3):
+    #             gc.collect()
+    #         return memory() - start
+    #     (get_mem_use(20))
+    #     a, b = get_mem_use(10), get_mem_use(110)
+    #     if not isosx and abs(b - a) > 1:
+    #         raise ValueError('Leaked %s MB for %d calls'%(b - a, 100))
+    #

@@ -131,6 +131,7 @@ unrar_callback(UINT msg, LPARAM user_data, LPARAM p1, LPARAM p2) {
         case UCM_NEEDPASSWORDW:
             if (p2 > -1 && callback) {
                 PyObject *pw = PyObject_CallMethod(callback, (char*)"_get_password", NULL);
+                if (PyErr_Occurred()) PyErr_Print();
                 if (pw) {
                     Py_ssize_t sz = unicode_to_wchar(pw, (wchar_t*)p1, p2);
                     Py_DECREF(pw);
@@ -145,6 +146,7 @@ unrar_callback(UINT msg, LPARAM user_data, LPARAM p1, LPARAM p2) {
 #else
                 PyObject *pw = PyObject_CallMethod(callback, (char*)"_process_data", "s#", (char*)p1, (int)p2);
 #endif
+                if (PyErr_Occurred()) PyErr_Print();
                 ret = (pw && PyObject_IsTrue(pw)) ? 0 : -1;
                 Py_XDECREF(pw);
             }

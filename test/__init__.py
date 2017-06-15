@@ -5,6 +5,9 @@
 from __future__ import absolute_import, division, print_function, unicode_literals
 
 import os
+import shutil
+import sys
+import tempfile
 import unittest
 
 base = os.path.dirname(os.path.abspath(__file__))
@@ -16,3 +19,16 @@ class TestCase(unittest.TestCase):
     longMessage = True
     tb_locals = True
     maxDiff = None
+
+
+class TempDir(object):
+
+    def __enter__(self):
+        self.tdir = tempfile.mkdtemp()
+        if isinstance(self.tdir, bytes):
+            self.tdir = self.tdir.decode(sys.getfilesystemencoding())
+        return self.tdir
+
+    def __exit__(self, *a):
+        shutil.rmtree(self.tdir)
+        del self.tdir
