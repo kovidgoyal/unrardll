@@ -5,17 +5,21 @@
 from __future__ import absolute_import, division, print_function, unicode_literals
 
 import glob
+import importlib
 import os
 import re
 import sys
+from distutils.command.build import build as Build
 
 from setuptools import Extension, setup
 
 self_path = os.path.abspath(__file__)
 base = os.path.dirname(self_path)
 iswindows = hasattr(sys, 'getwindowsversion')
-raw = open(os.path.join(base, 'src/unrardll/__init__.py'), 'rb').read().decode('utf-8')
-version = map(int, re.search(r'^version = V\((\d+), (\d+), (\d+)', raw, flags=re.M).groups())
+raw = open(os.path.join(base, 'src/unrardll/__init__.py'),
+           'rb').read().decode('utf-8')
+version = map(
+    int, re.search(r'^version = V\((\d+), (\d+), (\d+)', raw, flags=re.M).groups())
 
 
 def include_dirs():
@@ -44,11 +48,40 @@ def macros():
     ans = [
         ('SILENT', 1),
         ('RARDLL', 1),
-        ('UNRAR', 1),
-    ]
+        ('UNRAR', 1), ]
     if not iswindows:
         ans.append(('_UNIX', 1))
     return ans
+
+
+def find_tests():
+    import unittest
+    suites = []
+    for f in os.listdir(os.path.join(base, 'test')):
+        n, ext = os.path.splitext(f)
+        if ext == '.py' and n not in ('__init__',):
+            m = importlib.import_module('test.' + n)
+            suite = unittest.defaultTestLoader.loadTestsFromModule(m)
+            suites.append(suite)
+    return unittest.TestSuite(suites)
+
+
+class Test(Build):
+
+    description = "run unit tests after in-place build"
+
+    def run(self):
+        import unittest
+        Build.run(self)
+        if self.dry_run:
+            self.announce('skipping "test" (dry run)')
+            return
+        tests = find_tests()
+        r = unittest.TextTestRunner
+        result = r(verbosity=2).run(tests)
+
+        if not result.wasSuccessful():
+            raise SystemExit(1)
 
 
 CLASSIFIERS = """\
@@ -74,6 +107,7 @@ setup(
     platforms=['any'],
     packages=['unrardll'],
     package_dir={'': 'src'},
+    cmdclass={'test': Test},
     ext_modules=[
         Extension(
             str('unrardll.unrar'),

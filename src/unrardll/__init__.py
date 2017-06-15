@@ -6,6 +6,34 @@ from __future__ import absolute_import, division, print_function, unicode_litera
 
 from collections import namedtuple
 
+from . import unrar
+
 V = namedtuple('Version', 'major minor patch')
 
 version = V(0, 1, 0)
+RARDLL_VERSION = unrar.RARDllVersion
+
+
+def is_useful(h):
+    return not (h['is_label'] or h['is_directory'] or h['is_symlink'])
+
+
+class Callback(object):
+
+    def _get_password(self):
+        return None
+
+    def _process_data(self, data):
+        pass
+
+
+def names(archive_path):
+    c = Callback()
+    f = unrar.open_archive(archive_path, c, False)
+    while True:
+        h = unrar.read_next_header(f)
+        if h is None:
+            break
+        if is_useful(h):
+            yield h['filename']
+        unrar.process_file(f)

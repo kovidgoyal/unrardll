@@ -247,7 +247,7 @@ header_to_python(RARHeaderDataEx *fh, PartialDataSet *data) {
     filename = wchar_to_unicode(fh->FileNameW, wcslen(fh->FileNameW));
     if(!filename) goto error;
 #define AVAL(name, code, val) {if (!(temp = Py_BuildValue(code, (val)))) goto error; if (PyDict_SetItemString(ans, name, temp) != 0) goto error; Py_DECREF(temp); temp = NULL;}
-    AVAL("filenamew", "N", filename);
+    AVAL("filename", "N", filename);
     AVAL("flags", "H", fh->Flags);
     AVAL("pack_size", "k", combine(fh->PackSizeHigh, fh->PackSize));
     AVAL("unpack_size", "k", combine(fh->UnpSizeHigh, fh->UnpSize));
@@ -314,7 +314,7 @@ static struct module_state _state;
 
 static PyMethodDef methods[] = {
     {"open_archive", (PyCFunction)open_archive, METH_VARARGS,
-        "open_archive(path, extract=False)\n\nOpen the RAR archive at path. By default opens for listing, use extract=True to open for extraction."
+        "open_archive(path, callback, extract)\n\nOpen the RAR archive at path. By default opens for listing, use extract=True to open for extraction."
     },
 
     {"get_comment", (PyCFunction)get_comment, METH_O,
