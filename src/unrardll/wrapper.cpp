@@ -110,7 +110,7 @@ wchar_to_unicode(const wchar_t *o, size_t sz) {
 static void 
 close_encapsulated_file(PyObject *capsule) {
     PartialDataSet* file = (PartialDataSet*)PyCapsule_GetPointer(capsule, NAME);
-    if (file != NULL) RARCloseArchive(file);
+    if (file != NULL) RARCloseArchive((HANDLE)file);
 }
 
 
@@ -137,6 +137,12 @@ open_archive(PyObject *self, PyObject *args) {
 
     rar_file = (PartialDataSet*)RAROpenArchiveEx(&open_info);
     if (!rar_file) {
+        convert_rar_error(open_info.OpenResult);
+        goto end;
+    }
+    if (open_info.OpenResult != ERAR_SUCCESS) {
+        RARCloseArchive((HANDLE)rar_file);
+        rar_file = NULL;
         convert_rar_error(open_info.OpenResult);
         goto end;
     }
