@@ -128,7 +128,6 @@ static PyObject*
 open_archive(PyObject *self, PyObject *args) {
     PyObject *path = NULL, *extract = NULL;
     RAROpenArchiveDataEx open_info = {0};
-    RARHeaderDataEx file_info = {0};
     PartialDataSet* rar_file = 0;
 
     if (!PyArg_ParseTuple(args, "O!O", PyUnicode_Type, &path, &extract)) return NULL;
@@ -276,6 +275,8 @@ initunrar(void)
         INITERROR;
     }
     UNRARError = st->error;
+
+    if (PyModule_AddIntConstant(module, "RARDllVersion",  RARGetDllVersion()) != 0) { INITERROR; }
 
 #if PY_MAJOR_VERSION >= 3
     return module;
