@@ -4,12 +4,13 @@
 
 from __future__ import absolute_import, division, print_function, unicode_literals
 
+import hashlib
 import os
 from binascii import crc32
 
-from unrardll import names, comment, extract, headers, PasswordRequired, BadPassword
+from unrardll import BadPassword, PasswordRequired, comment, extract, headers, names
 
-from . import TestCase, base, TempDir
+from . import TempDir, TestCase, base
 
 simple_rar = os.path.join(base, 'simple.rar')
 sr_data = {
@@ -83,6 +84,16 @@ class BasicTests(TestCase):
             self.assertRaises(PasswordRequired, extract, pr, tdir)
             self.assertRaises(BadPassword, extract, pr, tdir, password='sfasgsfdg')
             extract(pr, tdir, password='example')
+
+    def test_multipart(self):
+        mr = os.path.join(base, 'example_split_archive.part1.rar')
+        self.ae(list(names(mr)), ['Fifteen_Feet_of_Time.pdf'])
+        with TempDir() as tdir:
+            extract(mr, tdir)
+            h = next(headers(mr))
+            raw = open(os.path.join(tdir, h['filename']), 'rb').read()
+            self.ae(len(raw), h['unpack_size'])
+            self.ae(hashlib.sha1(raw).hexdigest(), 'a9fc6a11d000044f17fcdf65816348ce0be3b145')
 
     def test_memory_leaks(self):
         import gc

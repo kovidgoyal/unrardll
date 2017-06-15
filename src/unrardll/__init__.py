@@ -137,6 +137,7 @@ def do_func(func, archive_path, f, c):
 
 def headers(archive_path, password=None):
     c = Callback(pw=password)
+    archive_path = type('')(archive_path)
     f = unrar.open_archive(archive_path, c, False)
     while True:
         h = do_func(unrar.read_next_header, archive_path, f, c)
@@ -155,6 +156,7 @@ def names(archive_path, only_useful=False, password=None):
 
 def comment(archive_path):
     c = Callback()
+    archive_path = type('')(archive_path)
     f = unrar.open_archive(archive_path, c, False)
     return do_func(unrar.get_comment, archive_path, f, c)
 
@@ -174,6 +176,7 @@ class ExtractCallback(Callback):
 
 def extract(archive_path, location, password=None):
     c = ExtractCallback(pw=password)
+    archive_path = type('')(archive_path)
     f = unrar.open_archive(archive_path, c, True)
     seen = set()
     while True:
