@@ -6,7 +6,7 @@ from __future__ import absolute_import, division, print_function, unicode_litera
 
 import os
 
-from unrardll import names
+from unrardll import names, comment
 
 from . import TestCase, base
 
@@ -16,12 +16,12 @@ sr_data = {
     '1/sub-one': b'sub-one\n',
     '2': b'',
     '2/sub-two.txt': b'sub-two\n',
-    'F\xfc\xdfe.txt': b'unicode\n',
+    'Füße.txt': b'unicode\n',
     'max-compressed': b'max\n',
     'one.txt': b'one\n',
     'symlink': b'2/sub-two.txt',
     'uncompressed': b'uncompressed\n',
-    '\u8bf6\u6bd4\u5c41.txt': b'chinese unicode\n'}
+    '诶比屁.txt': b'chinese unicode\n'}
 
 
 class BasicTests(TestCase):
@@ -33,3 +33,6 @@ class BasicTests(TestCase):
         self.ae(all_names, list(names(simple_rar)))
         all_names.remove('symlink'), all_names.remove('1'), all_names.remove('2')
         self.ae(all_names, list(names(simple_rar, only_useful=True)))
+
+    def test_comment(self):
+        self.ae(comment(simple_rar), 'some comment\n')

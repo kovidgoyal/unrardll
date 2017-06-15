@@ -37,3 +37,9 @@ def names(archive_path, only_useful=False):
         if not only_useful or is_useful(h):
             yield h['filename']
         unrar.process_file(f)
+
+
+def comment(archive_path):
+    c = Callback()
+    f = unrar.open_archive(archive_path, c, False)
+    return unrar.get_comment(f)
