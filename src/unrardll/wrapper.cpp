@@ -52,7 +52,7 @@ static PyObject *UNRARError = NULL;
 
 static inline void
 convert_rar_error(unsigned int code) {
-#define CASE(x) case x: PyErr_SetString(UNRARError, "Error from unrar dll: " #x); break;
+#define CASE(x) case x: PyErr_SetString(UNRARError, #x); break;
     switch(code) {
         CASE(ERAR_SUCCESS)             
         CASE(ERAR_END_ARCHIVE)        
@@ -78,22 +78,15 @@ convert_rar_error(unsigned int code) {
 #undef CASE
 }
 
-static wchar_t *
-unicode_to_wchar(PyObject *o) {
-    wchar_t *buf;
-    Py_ssize_t len;
-    if (o == NULL) return NULL;
-    if (!PyUnicode_Check(o)) {PyErr_Format(PyExc_TypeError, "The python object must be a unicode object"); return NULL;}
-    len = PyUnicode_GET_SIZE(o);
-    buf = (wchar_t *)calloc(len+2, sizeof(wchar_t));
-    if (buf == NULL) { NOMEM; return NULL; }
+static inline Py_ssize_t
+unicode_to_wchar(PyObject *o, wchar_t *buf, Py_ssize_t sz) {
+    if (!PyUnicode_Check(o)) {PyErr_Format(PyExc_TypeError, "The python object must be a unicode object"); return -1;}
 #if PY_MAJOR_VERSION >= 3
-    len = PyUnicode_AsWideChar(o, buf, len);
+    sz = PyUnicode_AsWideChar(o, buf, sz);
 #else
-    len = PyUnicode_AsWideChar((PyUnicodeObject*)o, buf, len);
+    sz = PyUnicode_AsWideChar((PyUnicodeObject*)o, buf, sz);
 #endif
-    if (len == -1) { free(buf); PyErr_Format(PyExc_TypeError, "Invalid python unicode object."); return NULL; }
-    return buf;
+    return sz;
 }
 
 static PyObject *
@@ -124,15 +117,58 @@ encapsulate(PartialDataSet* file) {
 }
 
 
+static int CALLBACK
+unrar_callback(UINT msg, LPARAM user_data, LPARAM p1, LPARAM p2) {
+    PyObject *callback = (PyObject*)user_data;
+    if (callback == NULL) return -1;
+    switch(msg) {
+        case UCM_CHANGEVOLUME:
+        case UCM_CHANGEVOLUMEW:
+            if (p2 == RAR_VOL_NOTIFY) return 0;
+            break;
+        case UCM_NEEDPASSWORD:
+            break;  // we only support unicode passwords, which is fine since unrar asks for those before trying ansi password
+        case UCM_NEEDPASSWORDW:
+            if (p2 > -1) {
+                PyObject *pw = PyObject_CallMethod(callback, "_get_password", NULL);
+                if (pw) {
+                    Py_ssize_t sz = unicode_to_wchar(pw, (wchar_t*)p1, p2);
+                    Py_DECREF(pw);
+                    if (sz > 0) return 0;
+                }
+            }
+            break;
+        case UCM_PROCESSDATA:
+            if (p2 > -1) {
+#if PY_MAJOR_VERSION >= 3
+                PyObject *pw = PyObject_CallMethod(callback, "_process_data", "y#", (char*)p1, (int)p2);
+#else
+                PyObject *pw = PyObject_CallMethod(callback, "_process_data", "s#", (char*)p1, (int)p2);
+#endif
+                int ret = (pw && PyObject_IsTrue(pw)) ? 0 : -1;
+                Py_XDECREF(pw);
+                return ret;
+            }
+            break;
+    }
+    PyErr_Clear();
+    return -1;
+}
+
+
 static PyObject*
 open_archive(PyObject *self, PyObject *args) {
-    PyObject *path = NULL, *extract = NULL;
+    PyObject *path = NULL, *extract = NULL, *callback = NULL;
     RAROpenArchiveDataEx open_info = {0};
     PartialDataSet* rar_file = 0;
+    wchar_t pathbuf[NM] = {0};
 
-    if (!PyArg_ParseTuple(args, "O!O", PyUnicode_Type, &path, &extract)) return NULL;
+    if (!PyArg_ParseTuple(args, "O!OO", PyUnicode_Type, &path, &callback, &extract)) return NULL;
+    if (unicode_to_wchar(path, pathbuf, sizeof(pathbuf) / sizeof(pathbuf[0])) < 0) return NULL;
     open_info.OpenMode = PyObject_IsTrue(extract) ? RAR_OM_EXTRACT : RAR_OM_LIST;
-    open_info.ArcNameW = unicode_to_wchar(path);
+    open_info.Callback = unrar_callback;
+    open_info.UserData = (LPARAM)callback;
+    open_info.ArcNameW = pathbuf;
     if (open_info.ArcNameW == NULL)  goto end;
 
     rar_file = (PartialDataSet*)RAROpenArchiveEx(&open_info);
