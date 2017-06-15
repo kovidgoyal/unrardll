@@ -238,6 +238,71 @@ struct module_state {
     PyObject *error;
 };
 
+
+static inline unsigned long
+combine(unsigned int h, unsigned int l) {
+    unsigned long ans = h;
+    return (ans << 32) | l;
+}
+
+
+static PyObject*
+header_to_python(RARHeaderDataEx *fh, PartialDataSet *data) {
+    PyObject *ans = PyDict_New(), *temp, *filename;
+    if (!ans) return NULL;
+    filename = wchar_to_unicode(fh->FileNameW, wcslen(fh->FileNameW));
+    if(!filename) goto error;
+#define AVAL(name, code, val) {if (!(temp = Py_BuildValue(code, (val)))) goto error; if (PyDict_SetItemString(ans, name, temp) != 0) goto error; Py_DECREF(temp); temp = NULL;}
+    AVAL("filenamew", "N", filename);
+    AVAL("flags", "H", fh->Flags);
+    AVAL("pack_size", "k", combine(fh->PackSizeHigh, fh->PackSize));
+    AVAL("unpack_size", "k", combine(fh->UnpSizeHigh, fh->UnpSize));
+    AVAL("host_os", "b", fh->HostOS);
+    AVAL("file_crc", "I", fh->FileCRC);
+    AVAL("file_time", "I", fh->FileTime);
+    AVAL("unpack_ver", "b", fh->UnpVer);
+    AVAL("method", "b", fh->Method);
+    AVAL("file_attr", "I", fh->FileAttr);
+    AVAL("is_dir", "O", data->Arc.IsArcDir() ? Py_True : Py_False);
+#undef AVAL
+    return ans;
+error:
+    Py_DECREF(ans);
+    return NULL;
+}
+
+
+static PyObject*
+read_next_header(PyObject *self, PyObject *file_capsule) {
+    PartialDataSet *data = FROM_CAPSULE(file_capsule);
+    static RARHeaderDataEx header = {0};
+    unsigned int retval = RARReadHeaderEx((HANDLE)data, &header);
+
+    switch(retval) {
+        case ERAR_END_ARCHIVE:
+            Py_RETURN_NONE;
+            break;
+        case ERAR_SUCCESS:
+            return header_to_python(&header, data);
+            break;
+        default:
+            convert_rar_error(retval);
+            break;
+    }
+    return NULL;
+}
+
+
+static PyObject*
+process_file(PyObject *self, PyObject *file_capsule) {
+    PartialDataSet *data = FROM_CAPSULE(file_capsule);
+    unsigned int retval = RARProcessFileW((HANDLE)data, RAR_TEST, NULL, NULL);
+    if (retval == ERAR_SUCCESS) { Py_RETURN_NONE; }
+    convert_rar_error(retval);
+    return NULL;
+}
+
+
 #if PY_MAJOR_VERSION >= 3
 #define GETSTATE(m) ((struct module_state*)PyModule_GetState(m))
 #else
@@ -258,6 +323,13 @@ static PyMethodDef methods[] = {
         "get_flags(capsule)\n\nGet the flags from the opened archive capsule which must have been returned by open_archive."
     },
 
+    {"read_next_header", (PyCFunction)read_next_header, METH_O,
+        "read_next_header(capsule)\n\nRead the next header from the RAR archive"
+    },
+
+    {"process_file", (PyCFunction)process_file, METH_O,
+        "process_file(capsule)\n\nProcess the current file. The callback registered in open_archive will be called."
+    },
 
     {NULL, NULL}
 };
