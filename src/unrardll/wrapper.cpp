@@ -159,14 +159,13 @@ unrar_callback(UINT msg, LPARAM user_data, LPARAM p1, LPARAM p2) {
 
 static PyObject*
 open_archive(PyObject *self, PyObject *args) {
-    PyObject *path = NULL, *extract = NULL, *callback = NULL;
+    PyObject *path = NULL, *callback = NULL;
     RAROpenArchiveDataEx open_info = {0};
     PartialDataSet* rar_file = 0;
     wchar_t pathbuf[NM + 10] = {0};
 
-    if (!PyArg_ParseTuple(args, "O!OO", &PyUnicode_Type, &path, &callback, &extract)) return NULL;
+    if (!PyArg_ParseTuple(args, "O!O|I", &PyUnicode_Type, &path, &callback, &(open_info.OpenMode))) return NULL;
     if (unicode_to_wchar(path, pathbuf, sizeof(pathbuf) / sizeof(pathbuf[0])) < 0) return NULL;
-    open_info.OpenMode = PyObject_IsTrue(extract) ? RAR_OM_EXTRACT : RAR_OM_LIST;
     open_info.Callback = unrar_callback;
     open_info.UserData = (LPARAM)callback;
     open_info.ArcNameW = pathbuf;
@@ -324,7 +323,7 @@ static struct module_state _state;
 
 static PyMethodDef methods[] = {
     {"open_archive", (PyCFunction)open_archive, METH_VARARGS,
-        "open_archive(path, callback, extract)\n\nOpen the RAR archive at path. By default opens for listing, use extract=True to open for extraction."
+        "open_archive(path, callback, mode=RAR_OM_LIST)\n\nOpen the RAR archive at path. By default opens for listing, use mode to change that."
     },
 
     {"get_comment", (PyCFunction)get_comment, METH_O,
@@ -401,8 +400,10 @@ initunrar(void)
     }
     UNRARError = st->error;
     if (PyModule_AddObject(module, "UNRARError", UNRARError) != 0) { INITERROR;}
-
     if (PyModule_AddIntConstant(module, "RARDllVersion",  RARGetDllVersion()) != 0) { INITERROR; }
+    if (PyModule_AddIntMacro(module, RAR_OM_LIST) != 0) { INITERROR; }
+    if (PyModule_AddIntMacro(module, RAR_OM_EXTRACT) != 0) { INITERROR; }
+    if (PyModule_AddIntMacro(module, RAR_OM_LIST_INCSPLIT) != 0) { INITERROR; }
 
 #if PY_MAJOR_VERSION >= 3
     return module;

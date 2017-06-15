@@ -60,7 +60,7 @@ class BasicTests(TestCase):
 
     def test_extract(self):
         with TempDir() as tdir:
-            extract(simple_rar, tdir)
+            extract(simple_rar, tdir, verify_data=True)
             h = {
                 os.path.abspath(os.path.join(tdir, h['filename'])): h
                 for h in headers(simple_rar)}
@@ -68,8 +68,7 @@ class BasicTests(TestCase):
             for dirpath, dirnames, filenames in os.walk(tdir):
                 for f in filenames:
                     path = os.path.join(dirpath, f)
-                    data[os.path.relpath(path, tdir).replace(os.sep, '/')
-                         ] = d = open(path, 'rb').read()
+                    data[os.path.relpath(path, tdir).replace(os.sep, '/')] = d = open(path, 'rb').read()
                     if f == 'one.txt':
                         self.ae(os.path.getmtime(path), 1098472879)
                     self.ae(h[path]['unpack_size'], len(d))
@@ -89,7 +88,7 @@ class BasicTests(TestCase):
         mr = os.path.join(base, 'example_split_archive.part1.rar')
         self.ae(list(names(mr)), ['Fifteen_Feet_of_Time.pdf'])
         with TempDir() as tdir:
-            extract(mr, tdir)
+            extract(mr, tdir, verify_data=True)
             h = next(headers(mr))
             raw = open(os.path.join(tdir, h['filename']), 'rb').read()
             self.ae(len(raw), h['unpack_size'])
