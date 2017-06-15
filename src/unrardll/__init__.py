@@ -113,6 +113,7 @@ class ExtractCallback(Callback):
 
     def _process_data(self, data):
         self.write(data)
+        return True
 
     def reset(self, write=None):
         self.write = write
@@ -121,6 +122,7 @@ class ExtractCallback(Callback):
 def extract(archive_path, location):
     c = ExtractCallback()
     f = unrar.open_archive(archive_path, c, True)
+    seen = set()
     while True:
         h = unrar.read_next_header(f)
         if h is None:
@@ -136,9 +138,10 @@ def extract(archive_path, location):
                 # We ignore create directory errors since we dont
                 # care about missing empty dirs
         elif h['is_symlink']:
-            pass  # ignore
+            ensure_dir(os.path.dirname(dest))
         else:
             ensure_dir(os.path.dirname(dest))
-            c.reset(local_open(dest, 'wb').write)
+            c.reset(local_open(dest, 'ab' if dest in seen else 'wb').write)
         unrar.process_file(f)
         c.reset(None)
+        seen.add(dest)

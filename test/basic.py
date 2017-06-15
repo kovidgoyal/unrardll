@@ -19,7 +19,7 @@ sr_data = {
     'Füße.txt': b'unicode\n',
     'max-compressed': b'max\n',
     'one.txt': b'one\n',
-    'symlink': b'2/sub-two.txt',
+    'symlink': b'sub-two',
     'uncompressed': b'uncompressed\n',
     '诶比屁.txt': b'chinese unicode\n'}
 
@@ -50,7 +50,9 @@ class BasicTests(TestCase):
                 for f in filenames:
                     f = os.path.join(dirpath, f)
                     data[os.path.relpath(f, tdir).replace(os.sep, '/')] = open(f, 'rb').read()
-        self.ae(data, sr_data)
+        q = {k: v for k, v in sr_data.items() if v}
+        del q['symlink']
+        self.ae(data, q)
 
     # def test_leaks(self):
     #     import gc
