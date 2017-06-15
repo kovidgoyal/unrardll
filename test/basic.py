@@ -36,3 +36,8 @@ class BasicTests(TestCase):
 
     def test_comment(self):
         self.ae(comment(simple_rar), 'some comment\n')
+
+    def test_share_open(self):
+        with open(simple_rar, 'rb') as f:
+            self.ae(comment(simple_rar), 'some comment\n')
+            f.close()
