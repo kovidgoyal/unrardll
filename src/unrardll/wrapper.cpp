@@ -9,8 +9,40 @@
 #define UNICODE
 #define PY_SSIZE_T_CLEAN
 #include <Python.h>
-#include <unrar/dll.hpp>
+// We have to include rar.hpp not dll.hpp as the dll.hpp API provides no way to
+// extract UTF-16 comments without first roundtripping them through some
+// encoding. This is potentially lossy if the encoding, which is system
+// dependent, cannot handle all the unicode characters.
+#include <unrar/rar.hpp>  
 
+typedef struct {
+  CommandData Cmd;
+  Archive Arc;
+} PartialDataSet;  // taken from dll.cpp
+
+static int 
+RarErrorToDll(RAR_EXIT ErrCode) {
+  switch(ErrCode) {
+    case RARX_FATAL:
+      return ERAR_EREAD;
+    case RARX_CRC:
+      return ERAR_BAD_DATA;
+    case RARX_WRITE:
+      return ERAR_EWRITE;
+    case RARX_OPEN:
+      return ERAR_EOPEN;
+    case RARX_CREATE:
+      return ERAR_ECREATE;
+    case RARX_MEMORY:
+      return ERAR_NO_MEMORY;
+    case RARX_BADPWD:
+      return ERAR_BAD_PASSWORD;
+    case RARX_SUCCESS:
+      return ERAR_SUCCESS; // 0.
+    default:
+      return ERAR_UNKNOWN;
+  }
+}
 
 #define STRFY(x) #x
 #define STRFY2(x) STRFY(x)
@@ -65,25 +97,25 @@ unicode_to_wchar(PyObject *o) {
 }
 
 static PyObject *
-wchar_to_unicode(const wchar_t *o) {
+wchar_to_unicode(const wchar_t *o, size_t sz) {
     PyObject *ans;
     if (o == NULL) return NULL;
-    ans = PyUnicode_FromWideChar(o, wcslen(o));
+    ans = PyUnicode_FromWideChar(o, sz);
     if (ans == NULL) NOMEM;
     return ans;
 }
 
-static const char* NAME = "RARFileHandle";
+#define NAME "RARFileHandle"
 
 static void 
 close_encapsulated_file(PyObject *capsule) {
-    HANDLE file = (HANDLE)PyCapsule_GetPointer(capsule, NAME);
+    PartialDataSet* file = (PartialDataSet*)PyCapsule_GetPointer(capsule, NAME);
     if (file != NULL) RARCloseArchive(file);
 }
 
 
 static inline PyObject*
-encapsulate(HANDLE file) {
+encapsulate(PartialDataSet* file) {
     PyObject *ans = NULL;
     if (!file) return NULL;
     ans = PyCapsule_New(file, NAME, close_encapsulated_file);
@@ -97,14 +129,14 @@ open_archive(PyObject *self, PyObject *args) {
     PyObject *path = NULL, *extract = NULL;
     RAROpenArchiveDataEx open_info = {0};
     RARHeaderDataEx file_info = {0};
-    HANDLE rar_file = 0;
+    PartialDataSet* rar_file = 0;
 
     if (!PyArg_ParseTuple(args, "O!O", PyUnicode_Type, &path, &extract)) return NULL;
     open_info.OpenMode = PyObject_IsTrue(extract) ? RAR_OM_EXTRACT : RAR_OM_LIST;
     open_info.ArcNameW = unicode_to_wchar(path);
     if (open_info.ArcNameW == NULL)  goto end;
 
-    rar_file = RAROpenArchiveEx(&open_info);
+    rar_file = (PartialDataSet*)RAROpenArchiveEx(&open_info);
     if (!rar_file) {
         convert_rar_error(open_info.OpenResult);
         goto end;
@@ -113,6 +145,52 @@ open_archive(PyObject *self, PyObject *args) {
 end:
     free(open_info.ArcNameW);
     return encapsulate(rar_file);
+}
+
+static inline PartialDataSet*
+from_capsule(PyObject *file_capsule) {
+    PartialDataSet *data = (PartialDataSet*)PyCapsule_GetPointer(file_capsule, NAME);
+    if (data == NULL) {
+        PyErr_SetString(PyExc_TypeError, "Not a valid " NAME " capsule");
+        return NULL;
+    }
+    return data;
+}
+
+#define FROM_CAPSULE(x) from_capsule(x); if (data == NULL) return NULL;
+
+static PyObject*
+get_comment(PyObject *self, PyObject *file_capsule) {
+    PartialDataSet *data = FROM_CAPSULE(file_capsule);
+
+    Array<wchar> comment;
+    try {
+        if (!data->Arc.GetComment(&comment)) { Py_RETURN_NONE; }
+    } catch(RAR_EXIT err_code) {
+        convert_rar_error(data->Cmd.DllError == 0 ? RarErrorToDll(err_code) : data->Cmd.DllError);
+        return NULL;
+    } catch (std::bad_alloc&) {
+        return PyErr_NoMemory();
+    }
+    return wchar_to_unicode(&comment[0], comment.Size());
+}
+
+static PyObject*
+get_flags(PyObject *self, PyObject *file_capsule) {
+    PartialDataSet *data = FROM_CAPSULE(file_capsule);
+    PyObject *ans = PyDict_New();
+    if (ans == NULL) return NULL;
+#define SET(X) if (PyDict_SetItemString(ans, #X, data->Arc.X ? Py_True : Py_False) != 0) { Py_DECREF(ans); return NULL; }
+    SET(Volume);
+    SET(Locked);
+    SET(Solid);
+    SET(NewNumbering);
+    SET(Signed);
+    SET(Protected);
+    SET(Encrypted);
+    SET(FirstVolume);
+    return ans;
+#undef SET
 }
 
 // Boilerplate {{{
@@ -130,6 +208,14 @@ static struct module_state _state;
 static PyMethodDef methods[] = {
     {"open_archive", (PyCFunction)open_archive, METH_VARARGS,
         "open_archive(path, extract=False)\n\nOpen the RAR archive at path. By default opens for listing, use extract=True to open for extraction."
+    },
+
+    {"get_comment", (PyCFunction)get_comment, METH_O,
+        "get_comment(capsule)\n\nGet the comment from the opened archive capsule which must have been returned by open_archive."
+    },
+
+    {"get_flags", (PyCFunction)get_flags, METH_O,
+        "get_flags(capsule)\n\nGet the flags from the opened archive capsule which must have been returned by open_archive."
     },
 
 
