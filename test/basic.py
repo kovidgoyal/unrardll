@@ -25,6 +25,20 @@ sr_data = {
     '诶比屁.txt': b'chinese unicode\n'}
 
 
+def get_memory():
+    'Return memory usage in bytes'
+    # See https://pythonhosted.org/psutil/#psutil.Process.memory_info
+    import psutil
+    return psutil.Process(os.getpid()).memory_info().rss
+
+
+def memory(since=0.0):
+    'Return memory used in MB. The value of since is subtracted from the used memory'
+    ans = get_memory()
+    ans /= float(1024**2)
+    return ans - since
+
+
 class BasicTests(TestCase):
 
     def test_names(self):
@@ -46,12 +60,15 @@ class BasicTests(TestCase):
     def test_extract(self):
         with TempDir() as tdir:
             extract(simple_rar, tdir)
-            h = {os.path.abspath(os.path.join(tdir, h['filename'])): h for h in headers(simple_rar)}
+            h = {
+                os.path.abspath(os.path.join(tdir, h['filename'])): h
+                for h in headers(simple_rar)}
             data = {}
             for dirpath, dirnames, filenames in os.walk(tdir):
                 for f in filenames:
                     path = os.path.join(dirpath, f)
-                    data[os.path.relpath(path, tdir).replace(os.sep, '/')] = d = open(path, 'rb').read()
+                    data[os.path.relpath(path, tdir).replace(os.sep, '/')
+                         ] = d = open(path, 'rb').read()
                     if f == 'one.txt':
                         self.ae(os.path.getmtime(path), 1098472879)
                     self.ae(h[path]['unpack_size'], len(d))
@@ -67,25 +84,24 @@ class BasicTests(TestCase):
             self.assertRaises(BadPassword, extract, pr, tdir, password='sfasgsfdg')
             extract(pr, tdir, password='example')
 
-    # def test_leaks(self):
-    #     import gc
-    #     del f
-    #     for i in xrange(3):
-    #         gc.collect()
-    #
-    #     def get_mem_use(num):
-    #         start = memory()
-    #         s = SaveStream(stream)
-    #         for i in xrange(num):
-    #             with s:
-    #                 f = RARFile(stream)
-    #                 f.test()
-    #         del f, s
-    #         for i in xrange(3):
-    #             gc.collect()
-    #         return memory() - start
-    #     (get_mem_use(20))
-    #     a, b = get_mem_use(10), get_mem_use(110)
-    #     if not isosx and abs(b - a) > 1:
-    #         raise ValueError('Leaked %s MB for %d calls'%(b - a, 100))
-    #
+    def test_memory_leaks(self):
+        import gc
+
+        def collect():
+            for i in range(6):
+                gc.collect()
+            gc.collect()
+
+        with TempDir() as tdir:
+
+            def get_mem_use(num):
+                collect()
+                start = memory()
+                for i in range(num):
+                    extract(simple_rar, tdir)
+                collect()
+                return max(0, memory(start))
+
+            get_mem_use(5)  # ensure no memory used by get_mem_use itself is counted
+            a, b = get_mem_use(10), get_mem_use(100)
+        self.assertTrue(a == 0 or b/a < 3, '10 times usage: {} 100 times usage: {}'.format(a, b))
