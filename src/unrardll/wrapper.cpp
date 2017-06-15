@@ -233,12 +233,6 @@ get_flags(PyObject *self, PyObject *file_capsule) {
 #undef SET
 }
 
-// Boilerplate {{{
-struct module_state {
-    PyObject *error;
-};
-
-
 static inline unsigned long
 combine(unsigned int h, unsigned int l) {
     unsigned long ans = h;
@@ -302,6 +296,13 @@ process_file(PyObject *self, PyObject *file_capsule) {
     convert_rar_error(retval);
     return NULL;
 }
+
+
+// Boilerplate {{{
+struct module_state {
+    PyObject *error;
+};
+
 
 
 #if PY_MAJOR_VERSION >= 3
