@@ -138,6 +138,7 @@ def extract(archive_path, location):
         if not h['filename']:
             continue
         dest = safe_path(location, h['filename'])
+        c.reset(None)
         if h['is_dir']:
             try:
                 os.makedirs(safe_path(location, h['filename']))
@@ -157,5 +158,4 @@ def extract(archive_path, location):
             ensure_dir(os.path.dirname(dest))
             c.reset(local_open(dest, 'ab' if dest in seen else 'wb').write)
         unrar.process_file(f)
-        c.reset(None)
         seen.add(dest)
