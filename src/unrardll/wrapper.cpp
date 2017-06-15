@@ -132,7 +132,7 @@ unrar_callback(UINT msg, LPARAM user_data, LPARAM p1, LPARAM p2) {
             if (p2 > -1 && callback) {
                 PyObject *pw = PyObject_CallMethod(callback, (char*)"_get_password", NULL);
                 if (PyErr_Occurred()) PyErr_Print();
-                if (pw) {
+                if (pw && pw != Py_None) {
                     Py_ssize_t sz = unicode_to_wchar(pw, (wchar_t*)p1, p2);
                     Py_DECREF(pw);
                     if (sz > 0) ret = 0;
@@ -142,9 +142,9 @@ unrar_callback(UINT msg, LPARAM user_data, LPARAM p1, LPARAM p2) {
         case UCM_PROCESSDATA:
             if (p2 > -1 && callback) {
 #if PY_MAJOR_VERSION >= 3
-                PyObject *pw = PyObject_CallMethod(callback, (char*)"_process_data", "y#", (char*)p1, (int)p2);
+                PyObject *pw = PyObject_CallMethod(callback, "_process_data", "y#", (char*)p1, (int)p2);
 #else
-                PyObject *pw = PyObject_CallMethod(callback, (char*)"_process_data", "s#", (char*)p1, (int)p2);
+                PyObject *pw = PyObject_CallMethod(callback, (char*)"_process_data", (char*)"s#", (char*)p1, (int)p2);
 #endif
                 if (PyErr_Occurred()) PyErr_Print();
                 ret = (pw && PyObject_IsTrue(pw)) ? 0 : -1;
@@ -400,6 +400,7 @@ initunrar(void)
         INITERROR;
     }
     UNRARError = st->error;
+    if (PyModule_AddObject(module, "UNRARError", UNRARError) != 0) { INITERROR;}
 
     if (PyModule_AddIntConstant(module, "RARDllVersion",  RARGetDllVersion()) != 0) { INITERROR; }
 

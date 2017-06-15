@@ -7,7 +7,7 @@ from __future__ import absolute_import, division, print_function, unicode_litera
 import os
 from binascii import crc32
 
-from unrardll import names, comment, extract, headers
+from unrardll import names, comment, extract, headers, PasswordRequired, BadPassword
 
 from . import TestCase, base, TempDir
 
@@ -59,6 +59,13 @@ class BasicTests(TestCase):
         q = {k: v for k, v in sr_data.items() if v}
         del q['symlink']
         self.ae(data, q)
+
+    def test_password(self):
+        pr = os.path.join(base, 'example_password_protected.rar')
+        with TempDir() as tdir:
+            self.assertRaises(PasswordRequired, extract, pr, tdir)
+            self.assertRaises(BadPassword, extract, pr, tdir, password='sfasgsfdg')
+            extract(pr, tdir, password='example')
 
     # def test_leaks(self):
     #     import gc

@@ -18,7 +18,7 @@ RARDLL_VERSION = unrar.RARDllVersion
 iswindows = hasattr(sys, 'getwindowsversion')
 isosx = 'darwin' in sys.platform.lower()
 
-# local_open() opens a file that wont be inherited by child processes
+# local_open() opens a file that wont be inherited by child processes  {{{
 if sys.version_info.major < 3:
     if iswindows:
         def local_open(name, mode='r', bufsize=-1):
@@ -57,6 +57,7 @@ if sys.version_info.major < 3:
             return ans
 else:
     local_open = open
+# }}}
 
 
 def is_useful(h):
@@ -65,11 +66,19 @@ def is_useful(h):
 
 class Callback(object):
 
+    def __init__(self, pw=None):
+        self.pw = type('')(pw) if pw is not None else None
+        self.password_requested = False
+
     def _get_password(self):
-        return None
+        self.password_requested = True
+        return self.pw
 
     def _process_data(self, data):
         pass
+
+    def reset(self):
+        self.password_requested = False
 
 
 def safe_path(base, relpath):
@@ -99,19 +108,47 @@ def ensure_dir(path):
             raise
 
 
-def headers(archive_path):
-    c = Callback()
+class PasswordError(ValueError):
+    pass
+
+
+class PasswordRequired(PasswordError):
+
+    def __init__(self, archive_path):
+        ValueError.__init__(self, 'A password is required for: %r' % archive_path)
+
+
+class BadPassword(PasswordError):
+
+    def __init__(self, archive_path):
+        ValueError.__init__(self, 'The specified password is incorrect for: %r' % archive_path)
+
+
+def process_file(archive_path, f, c):
+    try:
+        unrar.process_file(f)
+    except unrar.UNRARError as e:
+        if e.message == 'ERAR_MISSING_PASSWORD':
+            raise PasswordRequired(archive_path)
+        if e.message == 'ERAR_BAD_DATA' and c.password_requested:
+            raise (BadPassword if c.pw else PasswordRequired)(archive_path)
+        raise
+
+
+def headers(archive_path, password=None):
+    c = Callback(pw=password)
     f = unrar.open_archive(archive_path, c, False)
     while True:
         h = unrar.read_next_header(f)
         if h is None:
             break
         yield h
-        unrar.process_file(f)
+        process_file(archive_path, f, c)
+        c.reset()
 
 
-def names(archive_path, only_useful=False):
-    for h in headers(archive_path):
+def names(archive_path, only_useful=False, password=None):
+    for h in headers(archive_path, password=password):
         if not only_useful or is_useful(h):
             yield h['filename']
 
@@ -130,12 +167,13 @@ class ExtractCallback(Callback):
         return True
 
     def reset(self, write=None):
+        Callback.reset(self)
         self.written = 0
         self.write = write
 
 
-def extract(archive_path, location):
-    c = ExtractCallback()
+def extract(archive_path, location, password=None):
+    c = ExtractCallback(pw=password)
     f = unrar.open_archive(archive_path, c, True)
     seen = set()
     while True:
@@ -166,7 +204,7 @@ def extract(archive_path, location):
             ensure_dir(os.path.dirname(dest))
             c.reset(local_open(dest, 'ab' if dest in seen else 'wb').write)
             extracted = True
-        unrar.process_file(f)
+        process_file(archive_path, f, c)
         seen.add(dest)
         if extracted:
             c.reset(None)  # so that file is closed
