@@ -119,40 +119,39 @@ encapsulate(PartialDataSet* file) {
 
 static int CALLBACK
 unrar_callback(UINT msg, LPARAM user_data, LPARAM p1, LPARAM p2) {
+    int ret = -1;
     PyObject *callback = (PyObject*)user_data;
-    if (callback == NULL) return -1;
     switch(msg) {
         case UCM_CHANGEVOLUME:
         case UCM_CHANGEVOLUMEW:
-            if (p2 == RAR_VOL_NOTIFY) return 0;
+            if (p2 == RAR_VOL_NOTIFY) ret = 0;
             break;
         case UCM_NEEDPASSWORD:
             break;  // we only support unicode passwords, which is fine since unrar asks for those before trying ansi password
         case UCM_NEEDPASSWORDW:
-            if (p2 > -1) {
+            if (p2 > -1 && callback) {
                 PyObject *pw = PyObject_CallMethod(callback, "_get_password", NULL);
                 if (pw) {
                     Py_ssize_t sz = unicode_to_wchar(pw, (wchar_t*)p1, p2);
                     Py_DECREF(pw);
-                    if (sz > 0) return 0;
+                    if (sz > 0) ret = 0;
                 }
             }
             break;
         case UCM_PROCESSDATA:
-            if (p2 > -1) {
+            if (p2 > -1 && callback) {
 #if PY_MAJOR_VERSION >= 3
                 PyObject *pw = PyObject_CallMethod(callback, "_process_data", "y#", (char*)p1, (int)p2);
 #else
                 PyObject *pw = PyObject_CallMethod(callback, "_process_data", "s#", (char*)p1, (int)p2);
 #endif
-                int ret = (pw && PyObject_IsTrue(pw)) ? 0 : -1;
+                ret = (pw && PyObject_IsTrue(pw)) ? 0 : -1;
                 Py_XDECREF(pw);
-                return ret;
             }
             break;
     }
     PyErr_Clear();
-    return -1;
+    return ret;
 }
 
 
