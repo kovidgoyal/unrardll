@@ -5,8 +5,9 @@
 from __future__ import absolute_import, division, print_function, unicode_literals
 
 import os
+from binascii import crc32
 
-from unrardll import names, comment, extract
+from unrardll import names, comment, extract, headers
 
 from . import TestCase, base, TempDir
 
@@ -45,13 +46,16 @@ class BasicTests(TestCase):
     def test_extract(self):
         with TempDir() as tdir:
             extract(simple_rar, tdir)
+            h = {os.path.abspath(os.path.join(tdir, h['filename'])): h for h in headers(simple_rar)}
             data = {}
             for dirpath, dirnames, filenames in os.walk(tdir):
                 for f in filenames:
                     path = os.path.join(dirpath, f)
-                    data[os.path.relpath(path, tdir).replace(os.sep, '/')] = open(path, 'rb').read()
+                    data[os.path.relpath(path, tdir).replace(os.sep, '/')] = d = open(path, 'rb').read()
                     if f == 'one.txt':
                         self.ae(os.path.getmtime(path), 1098472879)
+                    self.ae(h[path]['unpack_size'], len(d))
+                    self.ae(h[path]['file_crc'] & 0xffffffff, crc32(d) & 0xffffffff)
         q = {k: v for k, v in sr_data.items() if v}
         del q['symlink']
         self.ae(data, q)

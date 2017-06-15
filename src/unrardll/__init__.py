@@ -99,16 +99,21 @@ def ensure_dir(path):
             raise
 
 
-def names(archive_path, only_useful=False):
+def headers(archive_path):
     c = Callback()
     f = unrar.open_archive(archive_path, c, False)
     while True:
         h = unrar.read_next_header(f)
         if h is None:
             break
+        yield h
+        unrar.process_file(f)
+
+
+def names(archive_path, only_useful=False):
+    for h in headers(archive_path):
         if not only_useful or is_useful(h):
             yield h['filename']
-        unrar.process_file(f)
 
 
 def comment(archive_path):
@@ -121,9 +126,11 @@ class ExtractCallback(Callback):
 
     def _process_data(self, data):
         self.write(data)
+        self.written += len(data)
         return True
 
     def reset(self, write=None):
+        self.written = 0
         self.write = write
 
 
@@ -161,6 +168,6 @@ def extract(archive_path, location):
             extracted = True
         unrar.process_file(f)
         seen.add(dest)
-        c.reset(None)
         if extracted:
+            c.reset(None)  # so that file is closed
             os.utime(dest, (h['file_time'], h['file_time']))
