@@ -154,7 +154,7 @@ def extract(archive_path, location):
                 syn_base = os.path.dirname(dest)
                 if is_safe_symlink(location, os.path.join(syn_base, syn)):
                     ensure_dir(syn_base)
-                    os.symlink(h.get('redir_name'), dest)
+                    os.symlink(syn, dest)
         else:
             ensure_dir(os.path.dirname(dest))
             c.reset(local_open(dest, 'ab' if dest in seen else 'wb').write)
