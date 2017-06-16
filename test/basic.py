@@ -76,7 +76,10 @@ class BasicTests(TestCase):
 
     def test_extract(self):
         with TempDir() as tdir:
-            extract(simple_rar, tdir, verify_data=True)
+            # we cannot verify data on windows because of symlink which
+            # will not be detected as a symlink on windows and therefore
+            # be extracted and have a mismatched CRC
+            extract(simple_rar, tdir, verify_data=not iswindows)
             h = {
                 normalize(os.path.abspath(os.path.join(tdir, h['filename']))): h
                 for h in headers(simple_rar)}
