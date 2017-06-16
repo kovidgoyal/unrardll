@@ -351,7 +351,7 @@ process_file(PyObject *self, PyObject *args) {
     UnrarOperation *uo = FROM_CAPSULE(file_capsule);
     PartialDataSet *data = uo->unrar_data;
     ALLOW_THREADS;
-    unsigned int retval = RARProcessFileW((HANDLE)data, operation, NULL, NULL);
+    unsigned int retval = RARProcessFile((HANDLE)data, operation, NULL, NULL);
     BLOCK_THREADS;
     if (retval == ERAR_SUCCESS) { Py_RETURN_NONE; }
     convert_rar_error(retval);
