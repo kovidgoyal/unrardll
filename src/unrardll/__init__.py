@@ -129,9 +129,10 @@ def do_func(func, archive_path, f, c, *args):
     try:
         return func(f, *args)
     except unrar.UNRARError as e:
-        if e.message == 'ERAR_MISSING_PASSWORD':
+        m = e.args[0]
+        if m == 'ERAR_MISSING_PASSWORD':
             raise PasswordRequired(archive_path)
-        if e.message == 'ERAR_BAD_DATA' and c.password_requested:
+        if m == 'ERAR_BAD_DATA' and c.password_requested:
             raise (BadPassword if c.pw else PasswordRequired)(archive_path)
         raise
 
