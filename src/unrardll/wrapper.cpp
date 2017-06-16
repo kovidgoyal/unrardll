@@ -114,6 +114,7 @@ unrar_callback(UINT msg, LPARAM user_data, LPARAM p1, LPARAM p2) {
     int ret = -1;
     UnrarOperation *uo = (UnrarOperation*)user_data;
     PyObject *callback = uo->callback_object;
+    int length = p2 & 0xffffffff;  // unrar on win64 sometimes sets the higher order bits of p2 to random garbage
     switch(msg) {
         case UCM_CHANGEVOLUME:
         case UCM_CHANGEVOLUMEW:
@@ -122,12 +123,12 @@ unrar_callback(UINT msg, LPARAM user_data, LPARAM p1, LPARAM p2) {
         case UCM_NEEDPASSWORD:
             break;  // we only support unicode passwords, which is fine since unrar asks for those before trying ansi password
         case UCM_NEEDPASSWORDW:
-            if (p2 > -1 && callback) {
+            if (callback) {
                 BLOCK_THREADS;
                 PyObject *pw = PyObject_CallMethod(callback, (char*)"_get_password", NULL);
                 if (PyErr_Occurred()) PyErr_Print();
                 if (pw && pw != Py_None) {
-                    Py_ssize_t sz = unicode_to_wchar(pw, (wchar_t*)p1, p2);
+                    Py_ssize_t sz = unicode_to_wchar(pw, (wchar_t*)p1, length);
                     Py_DECREF(pw);
                     if (sz > 0) ret = 0;
                 }
@@ -135,11 +136,12 @@ unrar_callback(UINT msg, LPARAM user_data, LPARAM p1, LPARAM p2) {
             }
             break;
         case UCM_PROCESSDATA:
-            if (p2 > -1 && callback) {
+            if (callback) {
                 BLOCK_THREADS;
-                PyObject *pw = PyObject_CallMethod(callback, "_process_data", BYTES_FMT, (char*)p1, (int)p2);
+                PyObject *pw = PyObject_CallMethod(callback, "_process_data", BYTES_FMT, (char*)p1, length);
                 if (PyErr_Occurred()) PyErr_Print();
                 ret = (pw && PyObject_IsTrue(pw)) ? 0 : -1;
+                fflush(stdout);
                 Py_XDECREF(pw);
                 ALLOW_THREADS;
             }
@@ -291,7 +293,7 @@ process_file(PyObject *self, PyObject *args) {
     UnrarOperation *uo = FROM_CAPSULE(file_capsule);
     HANDLE data = uo->unrar_data;
     ALLOW_THREADS;
-    unsigned int retval = RARProcessFile((HANDLE)data, operation, NULL, NULL);
+    unsigned int retval = RARProcessFile(data, operation, NULL, NULL);
     BLOCK_THREADS;
     if (retval == ERAR_SUCCESS) { Py_RETURN_NONE; }
     convert_rar_error(retval);
