@@ -65,7 +65,7 @@ class BasicTests(TestCase):
 
     def test_comment(self):
         self.ae(comment(simple_rar), 'some comment\n')
-        self.assertIsNone(comment(password_rar))
+        self.ae(comment(password_rar), '')
 
     def test_share_open(self):
         with open(simple_rar, 'rb') as f:

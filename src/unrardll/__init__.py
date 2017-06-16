@@ -139,14 +139,16 @@ def do_func(func, archive_path, f, c, *args):
 
 
 @contextmanager
-def open_archive(archive_path, callback, mode=unrar.RAR_OM_LIST):
+def open_archive(archive_path, callback, mode=unrar.RAR_OM_LIST, get_comment=False):
     try:
-        f = unrar.open_archive(archive_path, callback, mode)
+        f = unrar.open_archive(archive_path, callback, mode, get_comment)
+        if get_comment:
+            f, c = f
     except unrar.UNRARError as e:
         m = e.args[0]
         raise OSError((errno.ENOENT, 'Failed to open archive at: %r with underlying unrar error code: %s' % (
             archive_path, m), archive_path))
-    yield f
+    yield (f, c) if get_comment else f
     unrar.close_archive(f)
     del f
 
@@ -173,8 +175,11 @@ def names(archive_path, only_useful=False, password=None):
 def comment(archive_path):
     c = Callback()
     archive_path = type('')(archive_path)
-    with open_archive(archive_path, c) as f:
-        return do_func(unrar.get_comment, archive_path, f, c)
+    with open_archive(archive_path, c, get_comment=True) as x:
+        # dll.cpp in the unrar source code must be patched, replacing WideToChar
+        # with WideToUtf otherwise the comment could be in any old system
+        # dependent encoding.
+        return x[1].decode('utf-8')
 
 
 class ExtractCallback(Callback):

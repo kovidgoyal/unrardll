@@ -52,6 +52,23 @@ def download_and_extract():
         tf.extractall()
 
 
+def replace_in_file(path, old, new, missing_ok=False):
+    if isinstance(old, type('')):
+        old = old.encode('utf-8')
+    if isinstance(new, type('')):
+        new = new.encode('utf-8')
+    with open(path, 'r+b') as f:
+        raw = f.read()
+        if isinstance(old, bytes):
+            nraw = raw.replace(old, new)
+        else:
+            nraw = old.sub(new, raw)
+        if raw == nraw and not missing_ok:
+            raise ValueError('Failed (pattern not found) to patch: ' + path)
+        f.seek(0), f.truncate()
+        f.write(nraw)
+
+
 def build_unix():
     if isosx:
         with open('makefile', 'r+b') as m:
@@ -67,15 +84,6 @@ def build_unix():
 
 def build_windows():
     PL = 'x64' if is64bit else 'Win32'
-    with open('dll.def', 'ab') as f:
-        if is64bit:
-            symbols = (
-                '?GetComment@Archive@@QEAA_NPEAV?$Array@_W@@@Z ?cleandata@@YAXPEAX_K@Z')
-        else:
-            symbols = (
-                '?GetComment@Archive@@QAE_NPAV?$Array@_W@@@Z ?cleandata@@YAXPAXI@Z')
-        for symbol in symbols.split():
-            f.write(b'\r\n  ' + symbol.encode('ascii'))
     subprocess.check_call([
         'msbuild.exe', 'UnRARDll.vcxproj', '/t:Build', '/p:Platform=' + PL, '/p:Configuration=Release'])
     lib = glob.glob('./build/*/Release/UnRAR.lib')[0]
@@ -89,6 +97,7 @@ def build_unrar():
     os.chdir('sw/build')
     download_and_extract()
     os.chdir('unrar')
+    replace_in_file('dll.cpp', 'WideToChar', 'WideToUtf')
     (build_windows if iswindows else build_unix)()
     for f in glob.glob('*.hpp'):
         shutil.copy2(f, '../../include/unrar')

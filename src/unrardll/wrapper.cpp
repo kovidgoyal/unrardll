@@ -9,50 +9,16 @@
 #define UNICODE
 #define PY_SSIZE_T_CLEAN
 #include <Python.h>
-// We have to include rar.hpp not dll.hpp as the dll.hpp API provides no way to
-// extract UTF-16 comments without first roundtripping them through some
-// encoding. This is potentially lossy if the encoding, which is system
-// dependent, cannot handle all the unicode characters.
-#include <unrar/rar.hpp>  
+#include <unrar/dll.hpp>  
 
 typedef struct {
-  CommandData Cmd;
-  Archive Arc;
-} PartialDataSet;  // taken from dll.cpp
-
-
-typedef struct {
-    PartialDataSet *unrar_data;
+    HANDLE unrar_data;
     PyObject *callback_object;
     PyGILState_STATE thread_state;
 } UnrarOperation;
 
 #define ALLOW_THREADS uo->thread_state = PyGILState_Ensure();
 #define BLOCK_THREADS PyGILState_Release(uo->thread_state); 
-
-static int 
-RarErrorToDll(RAR_EXIT ErrCode) {
-  switch(ErrCode) {
-    case RARX_FATAL:
-      return ERAR_EREAD;
-    case RARX_CRC:
-      return ERAR_BAD_DATA;
-    case RARX_WRITE:
-      return ERAR_EWRITE;
-    case RARX_OPEN:
-      return ERAR_EOPEN;
-    case RARX_CREATE:
-      return ERAR_ECREATE;
-    case RARX_MEMORY:
-      return ERAR_NO_MEMORY;
-    case RARX_BADPWD:
-      return ERAR_BAD_PASSWORD;
-    case RARX_SUCCESS:
-      return ERAR_SUCCESS; // 0.
-    default:
-      return ERAR_UNKNOWN;
-  }
-}
 
 #define STRFY(x) #x
 #define STRFY2(x) STRFY(x)
@@ -179,26 +145,35 @@ unrar_callback(UINT msg, LPARAM user_data, LPARAM p1, LPARAM p2) {
     return ret;
 }
 
+// From the RAR 5.0 standard it is 256 KB we use 512 to be safe
+#define MAX_COMMENT_LENGTH (512 * 1024)
 
 static PyObject*
 open_archive(PyObject *self, PyObject *args) {
-    PyObject *path = NULL, *callback = NULL;
+    PyObject *path = NULL, *callback = NULL, *get_comment = Py_False;
     RAROpenArchiveDataEx open_info = {0};
     UnrarOperation *uo = NULL;
-    wchar_t pathbuf[NM + 10] = {0};
+    wchar_t pathbuf[4096] = {0};
+    char comment_buf[MAX_COMMENT_LENGTH];
+    bool get_comments;
 
-    if (!PyArg_ParseTuple(args, "O!O|I", &PyUnicode_Type, &path, &callback, &(open_info.OpenMode))) return NULL;
+    if (!PyArg_ParseTuple(args, "O!O|IO", &PyUnicode_Type, &path, &callback, &(open_info.OpenMode), &(get_comment))) return NULL;
     if (unicode_to_wchar(path, pathbuf, sizeof(pathbuf) / sizeof(pathbuf[0])) < 0) return NULL;
     open_info.Callback = unrar_callback;
     open_info.ArcNameW = pathbuf;
     if (open_info.ArcNameW == NULL)  goto end;
     uo = (UnrarOperation*)calloc(1, sizeof(UnrarOperation));
     if (uo == NULL) { PyErr_NoMemory(); goto end; }
-    if (callback) { Py_INCREF(callback); uo->callback_object = callback; }
+    Py_INCREF(callback); uo->callback_object = callback;
     open_info.UserData = (LPARAM)uo;
+    get_comments = PyObject_IsTrue(get_comment);
+    if (get_comments) {
+        open_info.CmtBuf = comment_buf;
+        open_info.CmtBufSize = sizeof(comment_buf) / sizeof(comment_buf[0]);
+    }
 
     ALLOW_THREADS;
-    uo->unrar_data = (PartialDataSet*)RAROpenArchiveEx(&open_info);
+    uo->unrar_data = RAROpenArchiveEx(&open_info);
     BLOCK_THREADS;
     if (!uo->unrar_data) {
         Py_XDECREF(uo->callback_object); free(uo); uo = NULL;
@@ -213,7 +188,11 @@ open_archive(PyObject *self, PyObject *args) {
     }
 
 end:
-    return encapsulate(uo);
+    if (uo == NULL) return NULL;
+    PyObject *ans = encapsulate(uo);
+    if (ans == NULL) return NULL;
+    if (get_comments) return Py_BuildValue("Ns#", ans, open_info.CmtBuf, open_info.CmtSize ? open_info.CmtSize - 1 : 0);
+    return ans;
 }
 
 static PyObject*
@@ -234,47 +213,6 @@ from_capsule(PyObject *file_capsule) {
 
 #define FROM_CAPSULE(x) from_capsule(x); if (uo == NULL) return NULL;
 
-static PyObject*
-get_comment(PyObject *self, PyObject *file_capsule) {
-    UnrarOperation *uo = FROM_CAPSULE(file_capsule);
-    PartialDataSet *data = uo->unrar_data;
-    unsigned int rar_error_code = ERAR_SUCCESS;
-    bool has_comment = false;
-    Array<wchar> comment;
-
-    ALLOW_THREADS;
-    try {
-        has_comment = data->Arc.GetComment(&comment);
-    } catch(RAR_EXIT err_code) {
-        rar_error_code = data->Cmd.DllError == 0 ? RarErrorToDll(err_code) : data->Cmd.DllError;
-    } catch (std::bad_alloc&) {
-        rar_error_code = ERAR_NO_MEMORY;
-    }
-    BLOCK_THREADS;
-    if (!has_comment) { Py_RETURN_NONE; }
-    if (rar_error_code != ERAR_SUCCESS) { convert_rar_error(rar_error_code); return NULL; }
-    return wchar_to_unicode(&comment[0], comment.Size());
-}
-
-static PyObject*
-get_flags(PyObject *self, PyObject *file_capsule) {
-    UnrarOperation *uo = FROM_CAPSULE(file_capsule);
-    PartialDataSet *data = uo->unrar_data;
-    PyObject *ans = PyDict_New();
-    if (ans == NULL) return NULL;
-#define SET(X) if (PyDict_SetItemString(ans, #X, data->Arc.X ? Py_True : Py_False) != 0) { Py_DECREF(ans); return NULL; }
-    SET(Volume);
-    SET(Locked);
-    SET(Solid);
-    SET(NewNumbering);
-    SET(Signed);
-    SET(Protected);
-    SET(Encrypted);
-    SET(FirstVolume);
-    return ans;
-#undef SET
-}
-
 static inline unsigned long
 combine(unsigned int h, unsigned int l) {
     unsigned long ans = h;
@@ -292,7 +230,7 @@ is_symlink(unsigned int attr) {
 }
 
 static PyObject*
-header_to_python(RARHeaderDataEx *fh, PartialDataSet *data) {
+header_to_python(RARHeaderDataEx *fh, HANDLE data) {
     PyObject *ans = PyDict_New(), *temp, *filename;
     if (!ans) return NULL;
     filename = wchar_to_unicode(fh->FileNameW, wcslen(fh->FileNameW));
@@ -330,7 +268,7 @@ error:
 static PyObject*
 read_next_header(PyObject *self, PyObject *file_capsule) {
     UnrarOperation *uo = FROM_CAPSULE(file_capsule);
-    PartialDataSet *data = uo->unrar_data;
+    HANDLE data = uo->unrar_data;
     RARHeaderDataEx header = {0};  // Cannot be static as it has to be initialized to zero
     ALLOW_THREADS;
     unsigned int retval = RARReadHeaderEx((HANDLE)data, &header);
@@ -358,7 +296,7 @@ process_file(PyObject *self, PyObject *args) {
 
     if (!PyArg_ParseTuple(args, "O|i", &file_capsule, &operation)) return NULL;
     UnrarOperation *uo = FROM_CAPSULE(file_capsule);
-    PartialDataSet *data = uo->unrar_data;
+    HANDLE data = uo->unrar_data;
     ALLOW_THREADS;
     unsigned int retval = RARProcessFile((HANDLE)data, operation, NULL, NULL);
     BLOCK_THREADS;
@@ -389,14 +327,6 @@ static PyMethodDef methods[] = {
 
     {"close_archive", (PyCFunction)close_archive, METH_O,
         "close_archive(capsule)\n\nClose the specified archive."
-    },
-
-    {"get_comment", (PyCFunction)get_comment, METH_O,
-        "get_comment(capsule)\n\nGet the comment from the opened archive capsule which must have been returned by open_archive."
-    },
-
-    {"get_flags", (PyCFunction)get_flags, METH_O,
-        "get_flags(capsule)\n\nGet the flags from the opened archive capsule which must have been returned by open_archive."
     },
 
     {"read_next_header", (PyCFunction)read_next_header, METH_O,
