@@ -6,9 +6,12 @@ from __future__ import absolute_import, division, print_function, unicode_litera
 
 import hashlib
 import os
+import unicodedata
 from binascii import crc32
 
-from unrardll import BadPassword, PasswordRequired, comment, extract, headers, names, extract_member
+from unrardll import (
+    BadPassword, PasswordRequired, comment, extract, extract_member, headers, names
+)
 
 from . import TempDir, TestCase, base
 
@@ -24,6 +27,10 @@ sr_data = {
     'symlink': b'sub-two',
     'uncompressed': b'uncompressed\n',
     '诶比屁.txt': b'chinese unicode\n'}
+
+
+def normalize(x):
+    return unicodedata.normalize('NFC', x)
 
 
 def get_memory():
@@ -62,12 +69,12 @@ class BasicTests(TestCase):
         with TempDir() as tdir:
             extract(simple_rar, tdir, verify_data=True)
             h = {
-                os.path.abspath(os.path.join(tdir, h['filename'])): h
+                normalize(os.path.abspath(os.path.join(tdir, h['filename']))): h
                 for h in headers(simple_rar)}
             data = {}
             for dirpath, dirnames, filenames in os.walk(tdir):
                 for f in filenames:
-                    path = os.path.join(dirpath, f)
+                    path = normalize(os.path.join(dirpath, f))
                     data[os.path.relpath(path, tdir).replace(os.sep, '/')] = d = open(path, 'rb').read()
                     if f == 'one.txt':
                         self.ae(os.path.getmtime(path), 1098472879)
