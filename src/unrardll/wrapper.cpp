@@ -114,7 +114,10 @@ unrar_callback(UINT msg, LPARAM user_data, LPARAM p1, LPARAM p2) {
     int ret = -1;
     UnrarOperation *uo = (UnrarOperation*)user_data;
     PyObject *callback = uo->callback_object;
-#define length (p2 & 0xffffffff) // unrar on win64 sometimes sets the higher order bits of p2 to random garbage
+    // In systems where int and long have different sizes (win64) we cannot
+    // cast LPARAM which is a signed number to an int, so we convert only the
+    // low order bytes, which is correct for positive numbers
+#define length (p2 & 0xffffffff) 
     switch(msg) {
         case UCM_CHANGEVOLUME:
         case UCM_CHANGEVOLUMEW:
