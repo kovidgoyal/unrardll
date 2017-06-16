@@ -15,6 +15,7 @@ from unrardll import (
 
 from . import TempDir, TestCase, base
 
+password_rar = os.path.join(base, 'example_password_protected.rar')
 simple_rar = os.path.join(base, 'simple.rar')
 sr_data = {
     '1': b'',
@@ -59,6 +60,7 @@ class BasicTests(TestCase):
 
     def test_comment(self):
         self.ae(comment(simple_rar), 'some comment\n')
+        self.assertIsNone(comment(password_rar))
 
     def test_share_open(self):
         with open(simple_rar, 'rb') as f:
@@ -85,11 +87,10 @@ class BasicTests(TestCase):
         self.ae(data, q)
 
     def test_password(self):
-        pr = os.path.join(base, 'example_password_protected.rar')
         with TempDir() as tdir:
-            self.assertRaises(PasswordRequired, extract, pr, tdir)
-            self.assertRaises(BadPassword, extract, pr, tdir, password='sfasgsfdg')
-            extract(pr, tdir, password='example')
+            self.assertRaises(PasswordRequired, extract, password_rar, tdir)
+            self.assertRaises(BadPassword, extract, password_rar, tdir, password='sfasgsfdg')
+            extract(password_rar, tdir, password='example')
 
     def test_multipart(self):
         mr = os.path.join(base, 'example_split_archive.part1.rar')
