@@ -21,6 +21,7 @@ except ImportError:
 
 isosx = 'darwin' in sys.platform.lower()
 iswindows = hasattr(sys, 'getwindowsversion')
+is64bit = sys.maxsize > (1 << 32)
 
 
 def download(url):
@@ -58,6 +59,18 @@ def build_unix():
             m.write(raw.encode('utf-8'))
     flags = '-fPIC ' + os.environ.get('CXXFLAGS', '')
     subprocess.check_call(['make', '-j4', 'lib', 'CXXFLAGS="%s"' % flags.strip()])
+    lib = 'libunrar.' + ('dylib' if isosx else 'so')
+    shutil.copy2(lib, '../../lib')
+
+
+def build_windows():
+    PL = 'x64' if is64bit else 'Win32'
+    subprocess.check_call([
+        'msbuild.exe', 'UnRARDll.vcxproj', '/t:Build', '/p:Platform=' + PL, '/p:Configuration=Release'])
+    lib = glob.glob('./build/*/Release/UnRAR.lib')[0]
+    dll = glob.glob('./build/*/Release/unrar.dll')[0]
+    shutil.copy2(lib, '../../lib')
+    shutil.copy2(dll, '../../lib')
 
 
 def build_unrar():
@@ -65,9 +78,7 @@ def build_unrar():
     os.chdir('sw/build')
     download_and_extract()
     os.chdir('unrar')
-    build_unix()
-    lib = 'libunrar.' + ('dylib' if isosx else 'so')
-    shutil.copy2(lib, '../../lib')
+    (build_windows if iswindows else build_unix)()
     for f in glob.glob('*.hpp'):
         shutil.copy2(f, '../../include/unrar')
 
