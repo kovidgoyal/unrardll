@@ -20,6 +20,13 @@ typedef struct {
   Archive Arc;
 } PartialDataSet;  // taken from dll.cpp
 
+
+typedef struct {
+    PartialDataSet *unrar_data;
+    PyObject *callback_object;
+} UnrarOperation;
+
+
 static int 
 RarErrorToDll(RAR_EXIT ErrCode) {
   switch(ErrCode) {
@@ -102,17 +109,21 @@ wchar_to_unicode(const wchar_t *o, size_t sz) {
 
 static void 
 close_encapsulated_file(PyObject *capsule) {
-    PartialDataSet* file = (PartialDataSet*)PyCapsule_GetPointer(capsule, NAME);
-    if (file != NULL) RARCloseArchive((HANDLE)file);
+    UnrarOperation* uo = (UnrarOperation*)PyCapsule_GetPointer(capsule, NAME);
+    if (uo != NULL) {
+        if (uo->unrar_data) RARCloseArchive((HANDLE)uo->unrar_data);
+        Py_XDECREF(uo->callback_object);
+        free(uo);
+    }
 }
 
 
 static inline PyObject*
-encapsulate(PartialDataSet* file) {
+encapsulate(UnrarOperation* file) {
     PyObject *ans = NULL;
     if (!file) return NULL;
     ans = PyCapsule_New(file, NAME, close_encapsulated_file);
-    if (ans == NULL) { RARCloseArchive(file); return NULL; }
+    if (ans == NULL) { RARCloseArchive(file->unrar_data); Py_XDECREF(file->callback_object); free(file); return NULL; }
     return ans;
 }
 
@@ -120,7 +131,8 @@ encapsulate(PartialDataSet* file) {
 static int CALLBACK
 unrar_callback(UINT msg, LPARAM user_data, LPARAM p1, LPARAM p2) {
     int ret = -1;
-    PyObject *callback = (PyObject*)user_data;
+    UnrarOperation *uo = (UnrarOperation*)user_data;
+    PyObject *callback = uo->callback_object;
     switch(msg) {
         case UCM_CHANGEVOLUME:
         case UCM_CHANGEVOLUMEW:
@@ -161,35 +173,39 @@ static PyObject*
 open_archive(PyObject *self, PyObject *args) {
     PyObject *path = NULL, *callback = NULL;
     RAROpenArchiveDataEx open_info = {0};
-    PartialDataSet* rar_file = 0;
+    UnrarOperation *uo = NULL;
     wchar_t pathbuf[NM + 10] = {0};
 
     if (!PyArg_ParseTuple(args, "O!O|I", &PyUnicode_Type, &path, &callback, &(open_info.OpenMode))) return NULL;
     if (unicode_to_wchar(path, pathbuf, sizeof(pathbuf) / sizeof(pathbuf[0])) < 0) return NULL;
     open_info.Callback = unrar_callback;
-    open_info.UserData = (LPARAM)callback;
     open_info.ArcNameW = pathbuf;
     if (open_info.ArcNameW == NULL)  goto end;
+    uo = (UnrarOperation*)calloc(1, sizeof(UnrarOperation));
+    if (uo == NULL) { PyErr_NoMemory(); goto end; }
+    if (callback) { Py_INCREF(callback); uo->callback_object = callback; }
+    open_info.UserData = (LPARAM)uo;
 
-    rar_file = (PartialDataSet*)RAROpenArchiveEx(&open_info);
-    if (!rar_file) {
+    uo->unrar_data = (PartialDataSet*)RAROpenArchiveEx(&open_info);
+    if (!uo->unrar_data) {
+        Py_XDECREF(uo->callback_object); free(uo); uo = NULL;
         convert_rar_error(open_info.OpenResult);
         goto end;
     }
     if (open_info.OpenResult != ERAR_SUCCESS) {
-        RARCloseArchive((HANDLE)rar_file);
-        rar_file = NULL;
+        RARCloseArchive((HANDLE)uo->unrar_data);
+        Py_XDECREF(uo->callback_object); free(uo); uo = NULL;
         convert_rar_error(open_info.OpenResult);
         goto end;
     }
 
 end:
-    return encapsulate(rar_file);
+    return encapsulate(uo);
 }
 
-static inline PartialDataSet*
+static inline UnrarOperation*
 from_capsule(PyObject *file_capsule) {
-    PartialDataSet *data = (PartialDataSet*)PyCapsule_GetPointer(file_capsule, NAME);
+    UnrarOperation *data = (UnrarOperation*)PyCapsule_GetPointer(file_capsule, NAME);
     if (data == NULL) {
         PyErr_SetString(PyExc_TypeError, "Not a valid " NAME " capsule");
         return NULL;
@@ -197,11 +213,12 @@ from_capsule(PyObject *file_capsule) {
     return data;
 }
 
-#define FROM_CAPSULE(x) from_capsule(x); if (data == NULL) return NULL;
+#define FROM_CAPSULE(x) from_capsule(x); if (uo == NULL) return NULL;
 
 static PyObject*
 get_comment(PyObject *self, PyObject *file_capsule) {
-    PartialDataSet *data = FROM_CAPSULE(file_capsule);
+    UnrarOperation *uo = FROM_CAPSULE(file_capsule);
+    PartialDataSet *data = uo->unrar_data;
 
     Array<wchar> comment;
     try {
@@ -217,7 +234,8 @@ get_comment(PyObject *self, PyObject *file_capsule) {
 
 static PyObject*
 get_flags(PyObject *self, PyObject *file_capsule) {
-    PartialDataSet *data = FROM_CAPSULE(file_capsule);
+    UnrarOperation *uo = FROM_CAPSULE(file_capsule);
+    PartialDataSet *data = uo->unrar_data;
     PyObject *ans = PyDict_New();
     if (ans == NULL) return NULL;
 #define SET(X) if (PyDict_SetItemString(ans, #X, data->Arc.X ? Py_True : Py_False) != 0) { Py_DECREF(ans); return NULL; }
@@ -278,7 +296,8 @@ error:
 
 static PyObject*
 read_next_header(PyObject *self, PyObject *file_capsule) {
-    PartialDataSet *data = FROM_CAPSULE(file_capsule);
+    UnrarOperation *uo = FROM_CAPSULE(file_capsule);
+    PartialDataSet *data = uo->unrar_data;
     RARHeaderDataEx header = {0};  // Cannot be static as it has to be initialized to zero
     unsigned int retval = RARReadHeaderEx((HANDLE)data, &header);
 
@@ -303,7 +322,8 @@ process_file(PyObject *self, PyObject *args) {
     PyObject *file_capsule;
 
     if (!PyArg_ParseTuple(args, "O|i", &file_capsule, &operation)) return NULL;
-    PartialDataSet *data = FROM_CAPSULE(file_capsule);
+    UnrarOperation *uo = FROM_CAPSULE(file_capsule);
+    PartialDataSet *data = uo->unrar_data;
     unsigned int retval = RARProcessFileW((HANDLE)data, operation, NULL, NULL);
     if (retval == ERAR_SUCCESS) { Py_RETURN_NONE; }
     convert_rar_error(retval);
