@@ -114,7 +114,7 @@ unrar_callback(UINT msg, LPARAM user_data, LPARAM p1, LPARAM p2) {
     int ret = -1;
     UnrarOperation *uo = (UnrarOperation*)user_data;
     PyObject *callback = uo->callback_object;
-    int length = p2 & 0xffffffff;  // unrar on win64 sometimes sets the higher order bits of p2 to random garbage
+#define length (p2 & 0xffffffff) // unrar on win64 sometimes sets the higher order bits of p2 to random garbage
     switch(msg) {
         case UCM_CHANGEVOLUME:
         case UCM_CHANGEVOLUMEW:
@@ -149,6 +149,7 @@ unrar_callback(UINT msg, LPARAM user_data, LPARAM p1, LPARAM p2) {
     }
     PyErr_Clear();
     return ret;
+#undef length
 }
 
 // From the RAR 5.0 standard it is 256 KB we use 512 to be safe
