@@ -24,8 +24,11 @@ typedef struct {
 typedef struct {
     PartialDataSet *unrar_data;
     PyObject *callback_object;
+    PyGILState_STATE thread_state;
 } UnrarOperation;
 
+#define ALLOW_THREADS uo->thread_state = PyGILState_Ensure();
+#define BLOCK_THREADS PyGILState_Release(uo->thread_state); 
 
 static int 
 RarErrorToDll(RAR_EXIT ErrCode) {
@@ -63,7 +66,6 @@ convert_rar_error(unsigned int code) {
     switch(code) {
         CASE(ERAR_SUCCESS)             
         CASE(ERAR_END_ARCHIVE)        
-        CASE(ERAR_NO_MEMORY)          
         CASE(ERAR_BAD_DATA)           
         CASE(ERAR_BAD_ARCHIVE)        
         CASE(ERAR_UNKNOWN_FORMAT)     
@@ -77,6 +79,10 @@ convert_rar_error(unsigned int code) {
         CASE(ERAR_MISSING_PASSWORD)   
         CASE(ERAR_EREFERENCE)         
         CASE(ERAR_BAD_PASSWORD)       
+
+        case ERAR_NO_MEMORY:
+            PyErr_NoMemory();
+            break;
 
         default:
             PyErr_SetString(UNRARError, "Unknown error");
@@ -142,6 +148,7 @@ unrar_callback(UINT msg, LPARAM user_data, LPARAM p1, LPARAM p2) {
             break;  // we only support unicode passwords, which is fine since unrar asks for those before trying ansi password
         case UCM_NEEDPASSWORDW:
             if (p2 > -1 && callback) {
+                BLOCK_THREADS;
                 PyObject *pw = PyObject_CallMethod(callback, (char*)"_get_password", NULL);
                 if (PyErr_Occurred()) PyErr_Print();
                 if (pw && pw != Py_None) {
@@ -149,10 +156,12 @@ unrar_callback(UINT msg, LPARAM user_data, LPARAM p1, LPARAM p2) {
                     Py_DECREF(pw);
                     if (sz > 0) ret = 0;
                 }
+                ALLOW_THREADS;
             }
             break;
         case UCM_PROCESSDATA:
             if (p2 > -1 && callback) {
+                BLOCK_THREADS;
 #if PY_MAJOR_VERSION >= 3
                 PyObject *pw = PyObject_CallMethod(callback, "_process_data", "y#", (char*)p1, (int)p2);
 #else
@@ -161,6 +170,7 @@ unrar_callback(UINT msg, LPARAM user_data, LPARAM p1, LPARAM p2) {
                 if (PyErr_Occurred()) PyErr_Print();
                 ret = (pw && PyObject_IsTrue(pw)) ? 0 : -1;
                 Py_XDECREF(pw);
+                ALLOW_THREADS;
             }
             break;
     }
@@ -186,7 +196,9 @@ open_archive(PyObject *self, PyObject *args) {
     if (callback) { Py_INCREF(callback); uo->callback_object = callback; }
     open_info.UserData = (LPARAM)uo;
 
+    ALLOW_THREADS;
     uo->unrar_data = (PartialDataSet*)RAROpenArchiveEx(&open_info);
+    BLOCK_THREADS;
     if (!uo->unrar_data) {
         Py_XDECREF(uo->callback_object); free(uo); uo = NULL;
         convert_rar_error(open_info.OpenResult);
@@ -219,16 +231,21 @@ static PyObject*
 get_comment(PyObject *self, PyObject *file_capsule) {
     UnrarOperation *uo = FROM_CAPSULE(file_capsule);
     PartialDataSet *data = uo->unrar_data;
-
+    unsigned int rar_error_code = ERAR_SUCCESS;
+    bool has_comment = false;
     Array<wchar> comment;
+
+    ALLOW_THREADS;
     try {
-        if (!data->Arc.GetComment(&comment)) { Py_RETURN_NONE; }
+        has_comment = data->Arc.GetComment(&comment);
     } catch(RAR_EXIT err_code) {
-        convert_rar_error(data->Cmd.DllError == 0 ? RarErrorToDll(err_code) : data->Cmd.DllError);
-        return NULL;
+        rar_error_code = data->Cmd.DllError == 0 ? RarErrorToDll(err_code) : data->Cmd.DllError;
     } catch (std::bad_alloc&) {
-        return PyErr_NoMemory();
+        rar_error_code = ERAR_NO_MEMORY;
     }
+    BLOCK_THREADS;
+    if (!has_comment) { Py_RETURN_NONE; }
+    if (rar_error_code != ERAR_SUCCESS) { convert_rar_error(rar_error_code); return NULL; }
     return wchar_to_unicode(&comment[0], comment.Size());
 }
 
@@ -299,7 +316,9 @@ read_next_header(PyObject *self, PyObject *file_capsule) {
     UnrarOperation *uo = FROM_CAPSULE(file_capsule);
     PartialDataSet *data = uo->unrar_data;
     RARHeaderDataEx header = {0};  // Cannot be static as it has to be initialized to zero
+    ALLOW_THREADS;
     unsigned int retval = RARReadHeaderEx((HANDLE)data, &header);
+    BLOCK_THREADS;
 
     switch(retval) {
         case ERAR_END_ARCHIVE:
@@ -324,7 +343,9 @@ process_file(PyObject *self, PyObject *args) {
     if (!PyArg_ParseTuple(args, "O|i", &file_capsule, &operation)) return NULL;
     UnrarOperation *uo = FROM_CAPSULE(file_capsule);
     PartialDataSet *data = uo->unrar_data;
+    ALLOW_THREADS;
     unsigned int retval = RARProcessFileW((HANDLE)data, operation, NULL, NULL);
+    BLOCK_THREADS;
     if (retval == ERAR_SUCCESS) { Py_RETURN_NONE; }
     convert_rar_error(retval);
     return NULL;
