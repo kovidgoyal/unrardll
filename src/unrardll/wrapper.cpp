@@ -47,7 +47,7 @@ convert_rar_error(unsigned int code) {
         CASE(ERAR_BAD_PASSWORD)       
 
         case ERAR_NO_MEMORY:
-            PyErr_NoMemory();
+            NOMEM;
             break;
 
         default:
@@ -163,7 +163,7 @@ open_archive(PyObject *self, PyObject *args) {
     open_info.ArcNameW = pathbuf;
     if (open_info.ArcNameW == NULL)  goto end;
     uo = (UnrarOperation*)calloc(1, sizeof(UnrarOperation));
-    if (uo == NULL) { PyErr_NoMemory(); goto end; }
+    if (uo == NULL) { NOMEM; goto end; }
     Py_INCREF(callback); uo->callback_object = callback;
     open_info.UserData = (LPARAM)uo;
     get_comments = PyObject_IsTrue(get_comment);
