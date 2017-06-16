@@ -34,6 +34,7 @@ def download(url):
             if i <= 0:
                 raise
             print('Download failed, retrying...')
+            sys.stdout.flush()
             time.sleep(1)
 
 
@@ -41,6 +42,7 @@ def download_unrar():
     html = download('http://www.rarlab.com/rar_add.htm').decode('utf-8', 'replace')
     href = re.search(r'<a\s+.*?href="([^"]+)".*?>UnRAR source</a>', html).group(1)
     print('Downloading unrar', href)
+    sys.stdout.flush()
     return download(href)
 
 

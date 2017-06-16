@@ -7,6 +7,7 @@ from __future__ import absolute_import, division, print_function, unicode_litera
 import hashlib
 import os
 import unicodedata
+import unittest
 from binascii import crc32
 
 from unrardll import (
@@ -38,7 +39,10 @@ def normalize(x):
 def get_memory():
     'Return memory usage in bytes'
     # See https://pythonhosted.org/psutil/#psutil.Process.memory_info
-    import psutil
+    try:
+        import psutil
+    except ImportError:
+        raise unittest.SkipTest('psutil is not available')
     return psutil.Process(os.getpid()).memory_info().rss
 
 

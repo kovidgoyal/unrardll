@@ -162,7 +162,7 @@ def headers(archive_path, password=None, mode=unrar.RAR_OM_LIST):
 def names(archive_path, only_useful=False, password=None):
     for h in headers(archive_path, password=password):
         if not only_useful or is_useful(h):
-            yield h['filename']
+            yield h['filename'].replace(os.sep, '/')
 
 
 def comment(archive_path):
