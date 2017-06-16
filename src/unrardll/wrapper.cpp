@@ -281,6 +281,15 @@ combine(unsigned int h, unsigned int l) {
     return (ans << 32) | l;
 }
 
+static inline bool
+is_symlink(unsigned int attr) {
+    // See the IsLink() function in the unrar source code
+#ifdef _MSVC
+    return (attr & FILE_ATTRIBUTE_REPARSE_POINT)!=0;
+#else
+    return (attr & 0xF000)==0xA000;
+#endif
+}
 
 static PyObject*
 header_to_python(RARHeaderDataEx *fh, PartialDataSet *data) {
@@ -300,7 +309,7 @@ header_to_python(RARHeaderDataEx *fh, PartialDataSet *data) {
     AVAL("method", "b", fh->Method);
     AVAL("file_attr", "I", fh->FileAttr);
     AVAL("is_dir", "O", fh->Flags & RHDF_DIRECTORY ? Py_True : Py_False);
-    AVAL("is_symlink", "O", (IsLink(fh->FileAttr)) ? Py_True : Py_False);
+    AVAL("is_symlink", "O", (is_symlink(fh->FileAttr)) ? Py_True : Py_False);
     // AVAL("atime", "k", combine(fh->AtimeHigh, fh->AtimeLow));
     // AVAL("ctime", "k", combine(fh->CtimeHigh, fh->CtimeLow));
     // AVAL("mtime", "k", combine(fh->MtimeHigh, fh->MtimeLow));
