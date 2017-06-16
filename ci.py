@@ -70,7 +70,7 @@ def build_windows():
     lib = glob.glob('./build/*/Release/UnRAR.lib')[0]
     dll = glob.glob('./build/*/Release/unrar.dll')[0]
     shutil.copy2(lib, '../../lib')
-    shutil.copy2(dll, '../../lib')
+    shutil.copy2(dll, '../../..')
 
 
 def build_unrar():

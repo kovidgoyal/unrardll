@@ -4,6 +4,10 @@ platform:
     - x64
     - x86
 
+environment:
+    global:
+        UNRAR_INCLUDE: sw/include
+        UNRAR_LIBDIRS: sw/lib
 
 build_script:
     - ps: |
