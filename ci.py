@@ -65,6 +65,11 @@ def build_unix():
 
 def build_windows():
     PL = 'x64' if is64bit else 'Win32'
+    with open('dll.def', 'ab') as f:
+        for symbol in (
+                'RARProcessFileW ?IsLink@@YA_NI@Z ?IsArcDir@Archive@@QEAA_NXZ'
+                ' ?GetComment@Archive@@QEAA_NPEAV?$Array@_W@@@Z ?cleandata@@YAXPEAX_K@Z').split():
+            f.write(b'\r\n  ' + symbol.encode('ascii'))
     subprocess.check_call([
         'msbuild.exe', 'UnRARDll.vcxproj', '/t:Build', '/p:Platform=' + PL, '/p:Configuration=Release'])
     lib = glob.glob('./build/*/Release/UnRAR.lib')[0]
