@@ -11,6 +11,7 @@ import tempfile
 import unittest
 
 base = os.path.dirname(os.path.abspath(__file__))
+iswindows = hasattr(sys, 'getwindowsversion')
 
 
 class TestCase(unittest.TestCase):

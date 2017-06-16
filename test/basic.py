@@ -14,7 +14,7 @@ from unrardll import (
     BadPassword, PasswordRequired, comment, extract, extract_member, headers, names
 )
 
-from . import TempDir, TestCase, base
+from . import TempDir, TestCase, base, iswindows
 
 multipart_rar = os.path.join(base, 'example_split_archive.part1.rar')
 password_rar = os.path.join(base, 'example_password_protected.rar')
@@ -60,7 +60,9 @@ class BasicTests(TestCase):
             '1/sub-one', 'one.txt', '诶比屁.txt', 'Füße.txt', '2/sub-two.txt',
             'symlink', '1', '2', 'uncompressed', 'max-compressed']
         self.ae(all_names, list(names(simple_rar)))
-        all_names.remove('symlink'), all_names.remove('1'), all_names.remove('2')
+        if not iswindows:
+            all_names.remove('symlink')
+        all_names.remove('1'), all_names.remove('2')
         self.ae(all_names, list(names(simple_rar, only_useful=True)))
 
     def test_comment(self):
