@@ -9,6 +9,9 @@
 #define UNICODE
 #define PY_SSIZE_T_CLEAN
 #include <Python.h>
+#ifdef _WIN32
+#include <windows.h>
+#endif
 #include <unrar/dll.hpp>  
 
 typedef struct {
@@ -223,7 +226,7 @@ combine(unsigned int h, unsigned int l) {
 static inline bool
 is_symlink(unsigned int attr) {
     // See the IsLink() function in the unrar source code
-#ifdef _MSVC
+#ifdef _WIN32
     return (attr & FILE_ATTRIBUTE_REPARSE_POINT)!=0;
 #else
     return (attr & 0xF000)==0xA000;
