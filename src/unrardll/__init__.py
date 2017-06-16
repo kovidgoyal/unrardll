@@ -225,6 +225,7 @@ def _extract(f, archive_path, c, location):
         filename = h['filename']
         if not filename:
             continue
+        open_file = None
         dest = safe_path(location, filename)
         c.reset(crc=crc_map[filename])
         extracted = False
@@ -247,9 +248,14 @@ def _extract(f, archive_path, c, location):
             crc_map.pop(filename)
         else:
             ensure_dir(os.path.dirname(dest))
-            c.reset(write=local_open(dest, 'ab' if dest in seen else 'wb').write, crc=crc_map[filename])
+            open_file = local_open(dest, 'ab' if dest in seen else 'wb')
+            c.reset(write=open_file.write, crc=crc_map[filename])
             extracted = True
-        do_func(unrar.process_file, archive_path, f, c)
+        try:
+            do_func(unrar.process_file, archive_path, f, c)
+        finally:
+            if open_file is not None:
+                open_file.close()
         seen.add(dest)
         if extracted:
             crc_map[filename] = c.crc
