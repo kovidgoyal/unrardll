@@ -15,6 +15,7 @@ from unrardll import (
 
 from . import TempDir, TestCase, base
 
+multipart_rar = os.path.join(base, 'example_split_archive.part1.rar')
 password_rar = os.path.join(base, 'example_password_protected.rar')
 simple_rar = os.path.join(base, 'simple.rar')
 sr_data = {
@@ -93,11 +94,10 @@ class BasicTests(TestCase):
             extract(password_rar, tdir, password='example')
 
     def test_multipart(self):
-        mr = os.path.join(base, 'example_split_archive.part1.rar')
-        self.ae(list(names(mr)), ['Fifteen_Feet_of_Time.pdf'])
+        self.ae(list(names(multipart_rar)), ['Fifteen_Feet_of_Time.pdf'])
         with TempDir() as tdir:
-            extract(mr, tdir, verify_data=True)
-            h = next(headers(mr))
+            extract(multipart_rar, tdir, verify_data=True)
+            h = next(headers(multipart_rar))
             raw = open(os.path.join(tdir, h['filename']), 'rb').read()
             self.ae(len(raw), h['unpack_size'])
             self.ae(hashlib.sha1(raw).hexdigest(), 'a9fc6a11d000044f17fcdf65816348ce0be3b145')
