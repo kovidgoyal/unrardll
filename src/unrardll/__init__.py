@@ -137,10 +137,19 @@ def do_func(func, archive_path, f, c, *args):
         raise
 
 
+def open_archive(archive_path, callback, mode=unrar.RAR_OM_LIST):
+    try:
+        return unrar.open_archive(archive_path, callback, mode)
+    except unrar.UNRARError as e:
+        m = e.args[0]
+        raise OSError((errno.ENOENT, 'Failed to open archive at: %r with underlying unrar error code: %s' % (
+            archive_path, m), archive_path))
+
+
 def headers(archive_path, password=None, mode=unrar.RAR_OM_LIST):
     c = Callback(pw=password)
     archive_path = type('')(archive_path)
-    f = unrar.open_archive(archive_path, c, mode)
+    f = open_archive(archive_path, c, mode)
     while True:
         h = do_func(unrar.read_next_header, archive_path, f, c)
         if h is None:
@@ -159,7 +168,7 @@ def names(archive_path, only_useful=False, password=None):
 def comment(archive_path):
     c = Callback()
     archive_path = type('')(archive_path)
-    f = unrar.open_archive(archive_path, c)
+    f = open_archive(archive_path, c)
     return do_func(unrar.get_comment, archive_path, f, c)
 
 
@@ -204,7 +213,7 @@ def verify(archive_path, crc_map, password=None):
 def extract(archive_path, location, password=None, verify_data=False):
     c = ExtractCallback(pw=password, verify_data=verify_data)
     archive_path = type('')(archive_path)
-    f = unrar.open_archive(archive_path, c, unrar.RAR_OM_EXTRACT)
+    f = open_archive(archive_path, c, unrar.RAR_OM_EXTRACT)
     seen = set()
     crc_map = defaultdict(lambda: 0)
     while True:
@@ -252,7 +261,7 @@ def extract(archive_path, location, password=None, verify_data=False):
 def extract_member(archive_path, predicate, password=None, verify_data=False):
     c = ExtractCallback(pw=password, verify_data=verify_data)
     archive_path = type('')(archive_path)
-    f = unrar.open_archive(archive_path, c, unrar.RAR_OM_EXTRACT)
+    f = open_archive(archive_path, c, unrar.RAR_OM_EXTRACT)
     while True:
         h = do_func(unrar.read_next_header, archive_path, f, c)
         if h is None:

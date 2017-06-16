@@ -105,6 +105,9 @@ class BasicTests(TestCase):
         self.ae(extract_member(simple_rar, lambda h: h['filename'] == 'one.txt', verify_data=True), sr_data['one.txt'])
         self.assertIsNone(extract_member(simple_rar, lambda h: False))
 
+    def test_open_failure(self):
+        self.assertRaises(OSError, extract, 'sdfgsfgsggsdfg.rar', '.')
+
     def test_memory_leaks(self):
         import gc
 
