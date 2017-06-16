@@ -63,7 +63,7 @@ else:
 
 
 def is_useful(h):
-    return not (h['is_dir'] or h['is_symlink'])
+    return not (h['is_dir'] or h['redir_type'])
 
 
 class Callback(object):
@@ -242,14 +242,15 @@ def _extract(f, archive_path, c, location):
                 # We ignore create directory errors since we dont
                 # care about missing empty dirs
             crc_map.pop(filename)
-        elif h['is_symlink']:
-            syn = h.get('redir_name')
-            if syn and not iswindows:
-                # Only RAR 5 archives have a redir_name
-                syn_base = os.path.dirname(dest)
-                if is_safe_symlink(location, os.path.join(syn_base, syn)):
-                    ensure_dir(syn_base)
-                    os.symlink(syn, dest)
+        elif h['redir_type'] != 0:
+            if h['redir_type'] == 1:  # Unix symlink
+                syn = h.get('redir_name')
+                if syn and not iswindows:
+                    # Only RAR 5 archives have a redir_name
+                    syn_base = os.path.dirname(dest)
+                    if is_safe_symlink(location, os.path.join(syn_base, syn)):
+                        ensure_dir(syn_base)
+                        os.symlink(syn, dest)
             crc_map.pop(filename)
         else:
             ensure_dir(os.path.dirname(dest))
@@ -287,7 +288,7 @@ def extract_member(archive_path, predicate, password=None, verify_data=False):
             h = do_func(unrar.read_next_header, archive_path, f, c)
             if h is None:
                 return
-            if h['is_dir'] or h['is_symlink'] or not predicate(h):
+            if h['is_dir'] or h['redir_type'] or not predicate(h):
                 do_func(unrar.process_file, archive_path, f, c, unrar.RAR_SKIP)
             else:
                 buf = []
