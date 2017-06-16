@@ -9,6 +9,7 @@ import os
 import sys
 from binascii import crc32
 from collections import namedtuple, defaultdict
+from contextlib import contextmanager
 
 from . import unrar
 
@@ -137,26 +138,30 @@ def do_func(func, archive_path, f, c, *args):
         raise
 
 
+@contextmanager
 def open_archive(archive_path, callback, mode=unrar.RAR_OM_LIST):
     try:
-        return unrar.open_archive(archive_path, callback, mode)
+        f = unrar.open_archive(archive_path, callback, mode)
     except unrar.UNRARError as e:
         m = e.args[0]
         raise OSError((errno.ENOENT, 'Failed to open archive at: %r with underlying unrar error code: %s' % (
             archive_path, m), archive_path))
+    yield f
+    unrar.close_archive(f)
+    del f
 
 
 def headers(archive_path, password=None, mode=unrar.RAR_OM_LIST):
     c = Callback(pw=password)
     archive_path = type('')(archive_path)
-    f = open_archive(archive_path, c, mode)
-    while True:
-        h = do_func(unrar.read_next_header, archive_path, f, c)
-        if h is None:
-            break
-        yield h
-        do_func(unrar.process_file, archive_path, f, c)
-        c.reset()
+    with open_archive(archive_path, c, mode) as f:
+        while True:
+            h = do_func(unrar.read_next_header, archive_path, f, c)
+            if h is None:
+                break
+            yield h
+            do_func(unrar.process_file, archive_path, f, c)
+            c.reset()
 
 
 def names(archive_path, only_useful=False, password=None):
@@ -168,8 +173,8 @@ def names(archive_path, only_useful=False, password=None):
 def comment(archive_path):
     c = Callback()
     archive_path = type('')(archive_path)
-    f = open_archive(archive_path, c)
-    return do_func(unrar.get_comment, archive_path, f, c)
+    with open_archive(archive_path, c) as f:
+        return do_func(unrar.get_comment, archive_path, f, c)
 
 
 class ExtractCallback(Callback):
@@ -210,10 +215,7 @@ def verify(archive_path, crc_map, password=None):
                 k, nominal, got))
 
 
-def extract(archive_path, location, password=None, verify_data=False):
-    c = ExtractCallback(pw=password, verify_data=verify_data)
-    archive_path = type('')(archive_path)
-    f = open_archive(archive_path, c, unrar.RAR_OM_EXTRACT)
+def _extract(f, archive_path, c, location):
     seen = set()
     crc_map = defaultdict(lambda: 0)
     while True:
@@ -253,6 +255,14 @@ def extract(archive_path, location, password=None, verify_data=False):
             crc_map[filename] = c.crc
             c.reset()  # so that file is closed
             os.utime(dest, (h['file_time'], h['file_time']))
+    return crc_map
+
+
+def extract(archive_path, location, password=None, verify_data=False):
+    c = ExtractCallback(pw=password, verify_data=verify_data)
+    archive_path = type('')(archive_path)
+    with open_archive(archive_path, c, unrar.RAR_OM_EXTRACT) as f:
+        crc_map = _extract(f, archive_path, c, location)
     del f
     if verify_data:
         verify(archive_path, crc_map, password=password)
@@ -261,18 +271,18 @@ def extract(archive_path, location, password=None, verify_data=False):
 def extract_member(archive_path, predicate, password=None, verify_data=False):
     c = ExtractCallback(pw=password, verify_data=verify_data)
     archive_path = type('')(archive_path)
-    f = open_archive(archive_path, c, unrar.RAR_OM_EXTRACT)
-    while True:
-        h = do_func(unrar.read_next_header, archive_path, f, c)
-        if h is None:
-            return
-        if h['is_dir'] or h['is_symlink'] or not predicate(h):
-            do_func(unrar.process_file, archive_path, f, c, unrar.RAR_SKIP)
-        else:
-            buf = []
-            c.reset(write=buf.append)
-            do_func(unrar.process_file, archive_path, f, c)
-            break
+    with open_archive(archive_path, c, unrar.RAR_OM_EXTRACT) as f:
+        while True:
+            h = do_func(unrar.read_next_header, archive_path, f, c)
+            if h is None:
+                return
+            if h['is_dir'] or h['is_symlink'] or not predicate(h):
+                do_func(unrar.process_file, archive_path, f, c, unrar.RAR_SKIP)
+            else:
+                buf = []
+                c.reset(write=buf.append)
+                do_func(unrar.process_file, archive_path, f, c)
+                break
     del f
     crc_map = {h['filename']: c.crc}
     if verify_data:

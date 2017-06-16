@@ -115,11 +115,12 @@ wchar_to_unicode(const wchar_t *o, size_t sz) {
 
 static void 
 close_encapsulated_file(PyObject *capsule) {
-    UnrarOperation* uo = (UnrarOperation*)PyCapsule_GetPointer(capsule, NAME);
-    if (uo != NULL) {
+    if (PyCapsule_IsValid(capsule, NAME)) {
+        UnrarOperation* uo = (UnrarOperation*)PyCapsule_GetPointer(capsule, NAME);
         if (uo->unrar_data) RARCloseArchive((HANDLE)uo->unrar_data);
         Py_XDECREF(uo->callback_object);
         free(uo);
+        PyCapsule_SetName(capsule, NULL); // Invalidate capsule so free is not called twice
     }
 }
 
@@ -213,6 +214,12 @@ open_archive(PyObject *self, PyObject *args) {
 
 end:
     return encapsulate(uo);
+}
+
+static PyObject*
+close_archive(PyObject *self, PyObject *capsule) {
+    close_encapsulated_file(capsule);
+    Py_RETURN_NONE;
 }
 
 static inline UnrarOperation*
@@ -369,6 +376,10 @@ static struct module_state _state;
 static PyMethodDef methods[] = {
     {"open_archive", (PyCFunction)open_archive, METH_VARARGS,
         "open_archive(path, callback, mode=RAR_OM_LIST)\n\nOpen the RAR archive at path. By default opens for listing, use mode to change that."
+    },
+
+    {"close_archive", (PyCFunction)close_archive, METH_O,
+        "close_archive(capsule)\n\nClose the specified archive."
     },
 
     {"get_comment", (PyCFunction)get_comment, METH_O,
