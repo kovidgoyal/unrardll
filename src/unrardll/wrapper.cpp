@@ -299,7 +299,7 @@ header_to_python(RARHeaderDataEx *fh, PartialDataSet *data) {
     AVAL("unpack_ver", "b", fh->UnpVer);
     AVAL("method", "b", fh->Method);
     AVAL("file_attr", "I", fh->FileAttr);
-    AVAL("is_dir", "O", data->Arc.IsArcDir() ? Py_True : Py_False);
+    AVAL("is_dir", "O", fh->Flags & RHDF_DIRECTORY ? Py_True : Py_False);
     AVAL("is_symlink", "O", (IsLink(fh->FileAttr)) ? Py_True : Py_False);
     // AVAL("atime", "k", combine(fh->AtimeHigh, fh->AtimeLow));
     // AVAL("ctime", "k", combine(fh->CtimeHigh, fh->CtimeLow));

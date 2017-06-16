@@ -70,11 +70,11 @@ def build_windows():
     with open('dll.def', 'ab') as f:
         if is64bit:
             symbols = (
-                '?IsLink@@YA_NI@Z ?IsArcDir@Archive@@QEAA_NXZ'
+                '?IsLink@@YA_NI@Z '
                 ' ?GetComment@Archive@@QEAA_NPEAV?$Array@_W@@@Z ?cleandata@@YAXPEAX_K@Z')
         else:
             symbols = (
-                '?IsLink@@YA_NI@Z ?IsArcDir@Archive@@QAE_NXZ '
+                '?IsLink@@YA_NI@Z '
                 '?GetComment@Archive@@QAE_NPAV?$Array@_W@@@Z ?cleandata@@YAXPAXI@Z')
         for symbol in symbols.split():
             f.write(b'\r\n  ' + symbol.encode('ascii'))
