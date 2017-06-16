@@ -106,7 +106,7 @@ setup(
     url='https://github.com/kovidgoyal/unrardll',
     classifiers=[c for c in CLASSIFIERS.split("\n") if c],
     platforms=['any'],
-    packages=['unrardll'],
+    packages=[str('unrardll')],
     package_dir={'': 'src'},
     cmdclass={'test': Test},
     ext_modules=[
