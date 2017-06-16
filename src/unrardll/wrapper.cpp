@@ -23,6 +23,11 @@ typedef struct {
 #define STRFY(x) #x
 #define STRFY2(x) STRFY(x)
 #define NOMEM PyErr_SetString(PyExc_MemoryError, "Out of memory at line number: " STRFY2(__LINE__))
+#if PY_MAJOR_VERSION > 2
+#define BYTES_FMT "y#"
+#else
+#define BYTES_FMT "s#"
+#endif
 
 static PyObject *UNRARError = NULL;
 
@@ -129,11 +134,7 @@ unrar_callback(UINT msg, LPARAM user_data, LPARAM p1, LPARAM p2) {
         case UCM_PROCESSDATA:
             if (p2 > -1 && callback) {
                 BLOCK_THREADS;
-#if PY_MAJOR_VERSION >= 3
-                PyObject *pw = PyObject_CallMethod(callback, "_process_data", "y#", (char*)p1, (int)p2);
-#else
-                PyObject *pw = PyObject_CallMethod(callback, (char*)"_process_data", (char*)"s#", (char*)p1, (int)p2);
-#endif
+                PyObject *pw = PyObject_CallMethod(callback, "_process_data", BYTES_FMT, (char*)p1, (int)p2);
                 if (PyErr_Occurred()) PyErr_Print();
                 ret = (pw && PyObject_IsTrue(pw)) ? 0 : -1;
                 Py_XDECREF(pw);
@@ -191,7 +192,7 @@ end:
     if (uo == NULL) return NULL;
     PyObject *ans = encapsulate(uo);
     if (ans == NULL) return NULL;
-    if (get_comments) return Py_BuildValue("Ns#", ans, open_info.CmtBuf, open_info.CmtSize ? open_info.CmtSize - 1 : 0);
+    if (get_comments) return Py_BuildValue("N" BYTES_FMT, ans, open_info.CmtBuf, open_info.CmtSize ? open_info.CmtSize - 1 : 0);
     return ans;
 }
 
