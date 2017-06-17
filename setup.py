@@ -107,7 +107,7 @@ setup(
     classifiers=[c for c in CLASSIFIERS.split("\n") if c],
     platforms=['any'],
     packages=[str('unrardll')],
-    package_dir={'': 'src'},
+    package_dir={'': str('src')},
     cmdclass={'test': Test},
     ext_modules=[
         Extension(
