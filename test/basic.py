@@ -122,8 +122,8 @@ class BasicTests(TestCase):
                 self.ae(hashlib.sha1(raw).hexdigest(), 'a9fc6a11d000044f17fcdf65816348ce0be3b145')
 
     def test_extract_member(self):
-        self.ae(extract_member(simple_rar, lambda h: h['filename'] == 'one.txt', verify_data=True), sr_data['one.txt'])
-        self.assertIsNone(extract_member(simple_rar, lambda h: False))
+        self.ae(extract_member(simple_rar, lambda h: h['filename'] == 'one.txt', verify_data=True), ('one.txt', sr_data['one.txt']))
+        self.ae(extract_member(simple_rar, lambda h: False), (None, None))
 
     def test_open_failure(self):
         self.assertRaises(OSError, extract, 'sdfgsfgsggsdfg.rar', '.')

@@ -154,6 +154,7 @@ def open_archive(archive_path, callback, mode=unrar.RAR_OM_LIST, get_comment=Fal
 
 
 def headers(archive_path, password=None, mode=unrar.RAR_OM_LIST):
+    ''' Yield the headers for all files in the archive '''
     c = Callback(pw=password)
     archive_path = type('')(archive_path)
     with open_archive(archive_path, c, mode) as f:
@@ -167,12 +168,14 @@ def headers(archive_path, password=None, mode=unrar.RAR_OM_LIST):
 
 
 def names(archive_path, only_useful=False, password=None):
+    ''' Yield the archive file names for all files in the archive '''
     for h in headers(archive_path, password=password):
         if not only_useful or is_useful(h):
             yield h['filename'].replace(os.sep, '/')
 
 
 def comment(archive_path):
+    ''' Read the archive comment, if any. Return empty string if no comment. '''
     c = Callback()
     archive_path = type('')(archive_path)
     with open_archive(archive_path, c, get_comment=True) as x:
@@ -273,7 +276,8 @@ def _extract(f, archive_path, c, location):
     return crc_map
 
 
-def extract(archive_path, location, password=None, verify_data=False):
+def extract(archive_path, location='.', password=None, verify_data=False):
+    ''' Extract all files from the archive to the specified location, which must be an existing directory. '''
     c = ExtractCallback(pw=password, verify_data=verify_data)
     archive_path = type('')(archive_path)
     with open_archive(archive_path, c, unrar.RAR_OM_EXTRACT) as f:
@@ -284,13 +288,14 @@ def extract(archive_path, location, password=None, verify_data=False):
 
 
 def extract_member(archive_path, predicate, password=None, verify_data=False):
+    ''' Extract a single file from the archive for which the predicate function returns true. Return (file name, data as bytes). '''
     c = ExtractCallback(pw=password, verify_data=verify_data)
     archive_path = type('')(archive_path)
     with open_archive(archive_path, c, unrar.RAR_OM_EXTRACT) as f:
         while True:
             h = do_func(unrar.read_next_header, archive_path, f, c)
             if h is None:
-                return
+                return None, None
             if h['is_dir'] or h['redir_type'] or not predicate(h):
                 do_func(unrar.process_file, archive_path, f, c, unrar.RAR_SKIP)
             else:
@@ -302,4 +307,4 @@ def extract_member(archive_path, predicate, password=None, verify_data=False):
     crc_map = {h['filename']: c.crc}
     if verify_data:
         verify(archive_path, crc_map, password=password)
-    return b''.join(buf)
+    return h['filename'], b''.join(buf)
