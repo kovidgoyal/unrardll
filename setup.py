@@ -4,7 +4,6 @@
 
 from __future__ import absolute_import, division, print_function, unicode_literals
 
-import glob
 import importlib
 import os
 import re
@@ -38,10 +37,6 @@ def library_dirs():
     if 'UNRAR_LIBDIRS' in os.environ:
         ans.extend(os.environ['UNRAR_LIBDIRS'].split(os.pathsep))
     return ans
-
-
-def src_files():
-    return glob.glob(os.path.join(base, 'src', 'unrardll', '*.cpp'))
 
 
 def macros():
@@ -116,4 +111,7 @@ setup(
             libraries=libraries(),
             library_dirs=library_dirs(),
             define_macros=macros(),
-            sources=list(map(str, src_files())))])
+            sources=[str('src/unrardll/wrapper.cpp')]
+        )
+    ]
+)
