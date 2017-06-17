@@ -2,10 +2,11 @@
 # vim:fileencoding=utf-8
 # License: Apache 2.0 Copyright: 2017, Kovid Goyal <kovid at kovidgoyal.net>
 
-from __future__ import (absolute_import, division, print_function, unicode_literals)
+from __future__ import absolute_import, division, print_function, unicode_literals
 
 import glob
 import os
+import re
 import shlex
 import shutil
 import subprocess
@@ -13,10 +14,10 @@ import sys
 
 os.chdir(os.path.dirname(os.path.abspath(__file__)))
 
-sys.path.insert(0, '.')
-if True:
-    from build import version
-del sys.path[0]
+raw = open('src/unrardll/__init__.py', 'rb').read().decode('utf-8')
+version = map(
+    int, re.search(r'^version = V\((\d+), (\d+), (\d+)', raw, flags=re.M).groups())
+
 
 VERSION = '{}.{}.{}'.format(*version)
 
