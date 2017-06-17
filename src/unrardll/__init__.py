@@ -258,7 +258,10 @@ def _extract(f, archive_path, c, location):
             c.reset(write=open_file.write, crc=crc_map[filename])
             extracted = True
         try:
-            do_func(unrar.process_file, archive_path, f, c)
+            if open_file is not None and not c.verify_data:
+                do_func(unrar.process_file, archive_path, f, c, unrar.RAR_TEST, open_file.fileno())
+            else:
+                do_func(unrar.process_file, archive_path, f, c)
         finally:
             if open_file is not None:
                 open_file.close()

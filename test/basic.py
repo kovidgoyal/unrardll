@@ -74,23 +74,24 @@ class BasicTests(TestCase):
             f.close()
 
     def test_extract(self):
-        with TempDir() as tdir:
-            extract(simple_rar, tdir, verify_data=True)
-            h = {
-                normalize(os.path.abspath(os.path.join(tdir, h['filename']))): h
-                for h in headers(simple_rar)}
-            data = {}
-            for dirpath, dirnames, filenames in os.walk(tdir):
-                for f in filenames:
-                    path = normalize(os.path.join(dirpath, f))
-                    data[os.path.relpath(path, tdir).replace(os.sep, '/')] = d = open(path, 'rb').read()
-                    if f == 'one.txt':
-                        self.ae(os.path.getmtime(path), 1098472879)
-                    self.ae(h[path]['unpack_size'], len(d))
-                    self.ae(h[path]['file_crc'] & 0xffffffff, crc32(d) & 0xffffffff)
-        q = {k: v for k, v in sr_data.items() if v}
-        del q['symlink']
-        self.ae(data, q)
+        for v in (True, False):
+            with TempDir() as tdir:
+                extract(simple_rar, tdir, verify_data=v)
+                h = {
+                    normalize(os.path.abspath(os.path.join(tdir, h['filename']))): h
+                    for h in headers(simple_rar)}
+                data = {}
+                for dirpath, dirnames, filenames in os.walk(tdir):
+                    for f in filenames:
+                        path = normalize(os.path.join(dirpath, f))
+                        data[os.path.relpath(path, tdir).replace(os.sep, '/')] = d = open(path, 'rb').read()
+                        if f == 'one.txt':
+                            self.ae(os.path.getmtime(path), 1098472879)
+                        self.ae(h[path]['unpack_size'], len(d))
+                        self.ae(h[path]['file_crc'] & 0xffffffff, crc32(d) & 0xffffffff)
+            q = {k: v for k, v in sr_data.items() if v}
+            del q['symlink']
+            self.ae(data, q)
 
     def test_password(self):
         with TempDir() as tdir:
@@ -112,12 +113,13 @@ class BasicTests(TestCase):
 
     def test_multipart(self):
         self.ae(list(names(multipart_rar)), ['Fifteen_Feet_of_Time.pdf'])
-        with TempDir() as tdir:
-            extract(multipart_rar, tdir, verify_data=True)
-            h = next(headers(multipart_rar))
-            raw = open(os.path.join(tdir, h['filename']), 'rb').read()
-            self.ae(len(raw), h['unpack_size'])
-            self.ae(hashlib.sha1(raw).hexdigest(), 'a9fc6a11d000044f17fcdf65816348ce0be3b145')
+        for v in (True, False):
+            with TempDir() as tdir:
+                extract(multipart_rar, tdir, verify_data=v)
+                h = next(headers(multipart_rar))
+                raw = open(os.path.join(tdir, h['filename']), 'rb').read()
+                self.ae(len(raw), h['unpack_size'])
+                self.ae(hashlib.sha1(raw).hexdigest(), 'a9fc6a11d000044f17fcdf65816348ce0be3b145')
 
     def test_extract_member(self):
         self.ae(extract_member(simple_rar, lambda h: h['filename'] == 'one.txt', verify_data=True), sr_data['one.txt'])

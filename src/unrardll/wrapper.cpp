@@ -11,8 +11,13 @@
 #include <Python.h>
 #ifdef _WIN32
 #include <windows.h>
+#include <io.h>
+#define write _write
+#else
+#include <unistd.h>
 #endif
 #include <unrar/dll.hpp>  
+#include <errno.h>
 
 #define CALLBACK_ERROR_SZ 256
 typedef struct {
@@ -21,6 +26,7 @@ typedef struct {
     PyGILState_STATE thread_state;
     bool has_callback_error;
     char callback_error[CALLBACK_ERROR_SZ + 1];
+    int output_fd;
 } UnrarOperation;
 
 #define ALLOW_THREADS uo->thread_state = PyGILState_Ensure();
@@ -114,6 +120,30 @@ encapsulate(UnrarOperation* file) {
 static char _get_password[] = "_get_password";
 static char _process_data[] = "_process_data";
 
+
+static inline bool
+write_all(const char* data, size_t sz, int fd) {
+    ssize_t written;
+    int err;
+    while(sz > 0) {
+#ifdef _WIN32
+        _set_errno(0);
+#else
+        errno = 0;
+#endif
+        written = write(fd, data, sz);
+        err = errno;
+        if (written >= sz) return true;
+        if (written < 0) {
+            if (err == EINTR || err == EAGAIN || err == EWOULDBLOCK); continue;
+            return false;
+        }
+        if (written == 0 && err != 0) return false;
+        sz -= written;
+    } 
+    return true;
+}
+
 static int CALLBACK
 unrar_callback(UINT msg, LPARAM user_data, LPARAM p1, LPARAM p2) {
     int ret = -1;
@@ -170,20 +200,27 @@ unrar_callback(UINT msg, LPARAM user_data, LPARAM p1, LPARAM p2) {
                 break;
             }
             if (callback) {
-                BLOCK_THREADS;
-                PyObject *pw = PyObject_CallMethod(callback, _process_data, (char*)BYTES_FMT, reinterpret_cast<char*>(p1), length);
-                if (PyErr_Occurred()) {
-                    snprintf(uo->callback_error, CALLBACK_ERROR_SZ, "An exception occurred in the password callback handler"); 
-                    uo->has_callback_error = true;
-                } else {
-                    ret = (pw && PyObject_IsTrue(pw)) ? 0 : -1;
-                    if (ret != 0) {
-                        snprintf(uo->callback_error, CALLBACK_ERROR_SZ, "Processing canceled by the callback"); 
+                if (uo->output_fd > -1) {
+                    if (!write_all(reinterpret_cast<const char*>(p1), length, uo->output_fd)) {
+                        snprintf(uo->callback_error, CALLBACK_ERROR_SZ, "Failed to write all bytes to output file. Error: %s", strerror(errno)); 
                         uo->has_callback_error = true;
+                    } else ret = 0;
+                } else {
+                    BLOCK_THREADS;
+                    PyObject *pw = PyObject_CallMethod(callback, _process_data, (char*)BYTES_FMT, reinterpret_cast<char*>(p1), length);
+                    if (PyErr_Occurred()) {
+                        snprintf(uo->callback_error, CALLBACK_ERROR_SZ, "An exception occurred in the password callback handler"); 
+                        uo->has_callback_error = true;
+                    } else {
+                        ret = (pw && PyObject_IsTrue(pw)) ? 0 : -1;
+                        if (ret != 0) {
+                            snprintf(uo->callback_error, CALLBACK_ERROR_SZ, "Processing canceled by the callback"); 
+                            uo->has_callback_error = true;
+                        }
                     }
+                    Py_XDECREF(pw);
+                    ALLOW_THREADS;
                 }
-                Py_XDECREF(pw);
-                ALLOW_THREADS;
             } else {
                 snprintf(uo->callback_error, CALLBACK_ERROR_SZ, "No callback provided"); 
                 uo->has_callback_error = true;
@@ -330,11 +367,12 @@ read_next_header(PyObject *self, PyObject *file_capsule) {
 
 static PyObject*
 process_file(PyObject *self, PyObject *args) {
-    int operation = RAR_TEST;
+    int operation = RAR_TEST, output_fd = -1;
     PyObject *file_capsule;
 
-    if (!PyArg_ParseTuple(args, "O|i", &file_capsule, &operation)) return NULL;
+    if (!PyArg_ParseTuple(args, "O|ii", &file_capsule, &operation, &output_fd)) return NULL;
     UnrarOperation *uo = FROM_CAPSULE(file_capsule);
+    uo->output_fd = output_fd;
     HANDLE data = uo->unrar_data;
     ALLOW_THREADS;
     unsigned int retval = RARProcessFile(data, operation, NULL, NULL);
