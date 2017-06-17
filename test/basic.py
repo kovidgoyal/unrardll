@@ -11,7 +11,8 @@ import unittest
 from binascii import crc32
 
 from unrardll import (
-    BadPassword, PasswordRequired, comment, extract, extract_member, headers, names
+    BadPassword, PasswordRequired, comment, extract, extract_member, headers, names,
+    open_archive, unrar
 )
 
 from . import TempDir, TestCase, base
@@ -96,6 +97,18 @@ class BasicTests(TestCase):
             self.assertRaises(PasswordRequired, extract, password_rar, tdir)
             self.assertRaises(BadPassword, extract, password_rar, tdir, password='sfasgsfdg')
             extract(password_rar, tdir, password='example')
+
+    def test_invalid_callback(self):
+        class Callback(object):
+            pass
+        with open_archive(simple_rar, None, mode=unrar.RAR_OM_EXTRACT) as f:
+            unrar.read_next_header(f)
+            self.assertRaisesRegexp(unrar.UNRARError, "An exception occurred in the password callback handler", unrar.process_file, f)
+        c = Callback()
+        c._process_data = lambda x: None
+        with open_archive(simple_rar, c, mode=unrar.RAR_OM_EXTRACT) as f:
+            unrar.read_next_header(f)
+            self.assertRaisesRegexp(unrar.UNRARError,  "Processing canceled by the callback", unrar.process_file, f)
 
     def test_multipart(self):
         self.ae(list(names(multipart_rar)), ['Fifteen_Feet_of_Time.pdf'])

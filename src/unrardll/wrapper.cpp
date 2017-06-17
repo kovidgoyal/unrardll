@@ -14,10 +14,13 @@
 #endif
 #include <unrar/dll.hpp>  
 
+#define CALLBACK_ERROR_SZ 256
 typedef struct {
     HANDLE unrar_data;
     PyObject *callback_object;
     PyGILState_STATE thread_state;
+    bool has_callback_error;
+    char callback_error[CALLBACK_ERROR_SZ + 1];
 } UnrarOperation;
 
 #define ALLOW_THREADS uo->thread_state = PyGILState_Ensure();
@@ -108,6 +111,8 @@ encapsulate(UnrarOperation* file) {
     return ans;
 }
 
+static char _get_password[] = "_get_password";
+static char _process_data[] = "_process_data";
 
 static int CALLBACK
 unrar_callback(UINT msg, LPARAM user_data, LPARAM p1, LPARAM p2) {
@@ -122,31 +127,66 @@ unrar_callback(UINT msg, LPARAM user_data, LPARAM p1, LPARAM p2) {
         case UCM_CHANGEVOLUME:
         case UCM_CHANGEVOLUMEW:
             if (p2 == RAR_VOL_NOTIFY) ret = 0;
+            else {
+                snprintf(uo->callback_error, CALLBACK_ERROR_SZ, "Could not find next part of a multi-part archive"); 
+                uo->has_callback_error = true;
+            }
             break;
         case UCM_NEEDPASSWORD:
             break;  // we only support unicode passwords, which is fine since unrar asks for those before trying ansi password
         case UCM_NEEDPASSWORDW:
+            if (p2 <= 0) {
+                snprintf(uo->callback_error, CALLBACK_ERROR_SZ, "Invalid password buffer length sent to callback: %ld", p2); 
+                uo->has_callback_error = true;
+                break;
+            }
             if (callback) {
                 BLOCK_THREADS;
-                PyObject *pw = PyObject_CallMethod(callback, (char*)"_get_password", NULL);
-                if (PyErr_Occurred()) PyErr_Print();
+                PyObject *pw = PyObject_CallMethod(callback, _get_password, NULL);
+                if (PyErr_Occurred()) {
+                    snprintf(uo->callback_error, CALLBACK_ERROR_SZ, "An exception occurred in the password callback handler"); 
+                    uo->has_callback_error = true;
+                }
                 if (pw && pw != Py_None) {
-                    Py_ssize_t sz = unicode_to_wchar(pw, (wchar_t*)p1, length);
+                    Py_ssize_t sz = unicode_to_wchar(pw, reinterpret_cast<wchar_t*>(p1), length);
                     Py_DECREF(pw);
                     if (sz > 0) ret = 0;
+                    else {
+                        snprintf(uo->callback_error, CALLBACK_ERROR_SZ, "The password callback handler did not return a unicode object"); 
+                        uo->has_callback_error = true;
+                    }
                 }
+                PyErr_Clear();
                 ALLOW_THREADS;
+            } else {
+                snprintf(uo->callback_error, CALLBACK_ERROR_SZ, "No callback provided"); 
+                uo->has_callback_error = true;
             }
             break;
         case UCM_PROCESSDATA:
+            if (p2 < 0) {
+                snprintf(uo->callback_error, CALLBACK_ERROR_SZ, "Invalid buffer length sent to callback: %ld", p2); 
+                uo->has_callback_error = true;
+                break;
+            }
             if (callback) {
                 BLOCK_THREADS;
-                PyObject *pw = PyObject_CallMethod(callback, "_process_data", BYTES_FMT, (char*)p1, length);
-                if (PyErr_Occurred()) PyErr_Print();
-                ret = (pw && PyObject_IsTrue(pw)) ? 0 : -1;
-                fflush(stdout);
+                PyObject *pw = PyObject_CallMethod(callback, _process_data, (char*)BYTES_FMT, reinterpret_cast<char*>(p1), length);
+                if (PyErr_Occurred()) {
+                    snprintf(uo->callback_error, CALLBACK_ERROR_SZ, "An exception occurred in the password callback handler"); 
+                    uo->has_callback_error = true;
+                } else {
+                    ret = (pw && PyObject_IsTrue(pw)) ? 0 : -1;
+                    if (ret != 0) {
+                        snprintf(uo->callback_error, CALLBACK_ERROR_SZ, "Processing canceled by the callback"); 
+                        uo->has_callback_error = true;
+                    }
+                }
                 Py_XDECREF(pw);
                 ALLOW_THREADS;
+            } else {
+                snprintf(uo->callback_error, CALLBACK_ERROR_SZ, "No callback provided"); 
+                uo->has_callback_error = true;
             }
             break;
     }
@@ -300,7 +340,9 @@ process_file(PyObject *self, PyObject *args) {
     unsigned int retval = RARProcessFile(data, operation, NULL, NULL);
     BLOCK_THREADS;
     if (retval == ERAR_SUCCESS) { Py_RETURN_NONE; }
-    convert_rar_error(retval);
+    if (retval == ERAR_UNKNOWN && uo->has_callback_error) {
+        PyErr_SetString(UNRARError, uo->callback_error);
+    } else convert_rar_error(retval);
     return NULL;
 }
 
