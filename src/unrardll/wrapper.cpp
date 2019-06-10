@@ -133,13 +133,13 @@ write_all(const char* data, size_t sz, int fd) {
 #endif
         written = write(fd, data, sz);
         err = errno;
-        if (written >= sz)
-            return true;
         if (written < 0) {
             if (err == EINTR || err == EAGAIN || err == EWOULDBLOCK)
                 continue;
             return false;
         }
+        if ((size_t) written >= sz)
+            return true;
         if (written == 0 && err != 0)
             return false;
         sz -= written;
