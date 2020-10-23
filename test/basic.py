@@ -20,6 +20,11 @@ from . import TempDir, TestCase, base
 multipart_rar = os.path.join(base, 'example_split_archive.part1.rar')
 password_rar = os.path.join(base, 'example_password_protected.rar')
 simple_rar = os.path.join(base, 'simple.rar')
+if os.sep == '\\':
+    prefix = '\\\\?\\'
+    multipart_rar = prefix + os.path.abspath(multipart_rar)
+    password_rar = prefix + os.path.abspath(password_rar)
+    simple_rar = prefix + os.path.abspath(simple_rar)
 sr_data = {
     '1': b'',
     '1/sub-one': b'sub-one\n',
