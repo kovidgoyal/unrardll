@@ -1,0 +1,43 @@
+name: CI
+on: [push, pull_request]
+env:
+    CI: 'true'
+    LC_ALL: en_US.UTF-8
+    LANG: en_US.UTF-8
+    UNRAR_INCLUDE: sw/include
+    UNRAR_LIBDIRS: sw/lib
+    LD_LIBRARY_PATH: sw/lib
+    DYLD_LIBRARY_PATH: sw/lib
+
+jobs:
+    test:
+        name: Test on ${{ matrix.os }} (python=${{ matrix.pyver }})
+        runs-on: ${{ matrix.os }}
+        strategy:
+            matrix:
+                include:
+                    - { pyver: 2.7, os: ubuntu-latest }
+                    - { pyver: 3.6, os: ubuntu-latest }
+                    - { pyver: 3.9, os: ubuntu-latest }
+
+                    - { pyver: 3.8, os: macos-latest }
+
+                    - { pyver: 3.7, os: windows-latest }
+        steps:
+            - name: Checkout source code
+              uses: actions/checkout@master
+              with:
+                fetch-depth: 10
+
+            - name: Set up Python ${{ matrix.pyver }}
+              uses: actions/setup-python@master
+              with:
+                python-version: ${{ matrix.pyver }}
+
+            - name: Install dependencies
+              run:
+                python .github/workflows/ci.py build
+
+            - name: Run tests
+              run:
+                python .github/workflows/ci.py test
