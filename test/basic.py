@@ -12,7 +12,7 @@ from binascii import crc32
 
 from unrardll import (
     BadPassword, PasswordRequired, comment, extract, extract_member, headers, names,
-    open_archive, unrar
+    open_archive, unrar, make_long_path_useable
 )
 
 from . import TempDir, TestCase, base
@@ -81,6 +81,8 @@ class BasicTests(TestCase):
     def test_extract(self):
         for v in (True, False):
             with TempDir() as tdir:
+                tdir = os.path.join(tdir, 'a' * 250)
+                os.makedirs(make_long_path_useable(tdir))
                 extract(simple_rar, tdir, verify_data=v)
                 h = {
                     normalize(os.path.abspath(os.path.join(tdir, h['filename']))): h
