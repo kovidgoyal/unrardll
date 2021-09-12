@@ -15,7 +15,7 @@ from . import unrar
 
 V = namedtuple('Version', 'major minor patch')
 
-version = V(0, 1, 4)
+version = V(0, 1, 5)
 RARDLL_VERSION = unrar.RARDllVersion
 iswindows = hasattr(sys, 'getwindowsversion')
 isosx = 'darwin' in sys.platform.lower()
