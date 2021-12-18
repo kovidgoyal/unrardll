@@ -111,12 +111,12 @@ class BasicTests(TestCase):
             pass
         with open_archive(simple_rar, None, mode=unrar.RAR_OM_EXTRACT) as f:
             unrar.read_next_header(f)
-            self.assertRaisesRegexp(unrar.UNRARError, "An exception occurred in the password callback handler", unrar.process_file, f)
+            self.assertRaisesRegex(unrar.UNRARError, "An exception occurred in the password callback handler", unrar.process_file, f)
         c = Callback()
         c._process_data = lambda x: None
         with open_archive(simple_rar, c, mode=unrar.RAR_OM_EXTRACT) as f:
             unrar.read_next_header(f)
-            self.assertRaisesRegexp(unrar.UNRARError,  "Processing canceled by the callback", unrar.process_file, f)
+            self.assertRaisesRegex(unrar.UNRARError,  "Processing canceled by the callback", unrar.process_file, f)
 
     def test_multipart(self):
         self.ae(list(names(multipart_rar)), ['Fifteen_Feet_of_Time.pdf'])
