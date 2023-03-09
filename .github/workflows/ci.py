@@ -105,11 +105,6 @@ def find_msbuild():
 
 def build_windows():
     PL = 'x64' if is64bit else 'Win32'
-    # see https://github.com/microsoft/vcpkg/pull/8053
-    replace_in_file(
-        'UnRARDll.vcxproj',
-        '<StructMemberAlignment>4Bytes</StructMemberAlignment>', '')
-
     msbuild = find_msbuild()
     print('Using MSBuild:', msbuild)
     subprocess.check_call([
