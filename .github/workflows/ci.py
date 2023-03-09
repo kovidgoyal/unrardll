@@ -86,7 +86,9 @@ def build_unix():
             m.seek(0), m.truncate()
             m.write(raw.encode('utf-8'))
     flags = '-fPIC ' + os.environ.get('CXXFLAGS', '')
-    subprocess.check_call(['make', '-j4', 'lib', 'CXXFLAGS="%s"' % flags.strip()])
+    if ismacos:
+        flags = '-std=c++11 ' + flags
+    subprocess.check_call(['make', '-j4', 'lib', 'CXXFLAGS=%s' % flags.strip()])
     lib = 'libunrar.' + ('dylib' if ismacos else 'so')
     os.rename(lib, os.path.join(lib_dir, lib))
     print('Files in', lib_dir, os.listdir(lib_dir))
