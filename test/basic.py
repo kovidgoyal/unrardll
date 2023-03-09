@@ -11,7 +11,7 @@ import unittest
 from binascii import crc32
 
 from unrardll import (
-    BadPassword, PasswordRequired, comment, extract, extract_member, headers, names,
+    BadPassword, PasswordRequired, comment, extract, extract_member, extract_members, headers, names,
     open_archive, unrar, make_long_path_useable
 )
 
@@ -131,6 +131,21 @@ class BasicTests(TestCase):
     def test_extract_member(self):
         self.ae(extract_member(simple_rar, lambda h: h['filename'] == 'one.txt', verify_data=True), ('one.txt', sr_data['one.txt']))
         self.ae(extract_member(simple_rar, lambda h: False), (None, None))
+
+    def test_extract_members(self):
+        data = {'one.txt': b'', 'uncompressed': b''}
+        current = ''
+        def callback(x):
+            nonlocal current
+            if isinstance(x, dict):
+                current = x['filename']
+                return x['filename'] in data
+            if isinstance(x, bytes):
+                data[current] += x
+                return
+            self.assertTrue(x, 'Verification failed for: ' + current)
+        extract_members(simple_rar, callback, verify_data=True)
+        self.assertEqual(data, {k:sr_data[k] for k in data})
 
     def test_open_failure(self):
         self.assertRaises(OSError, extract, 'sdfgsfgsggsdfg.rar', '.')
