@@ -98,21 +98,23 @@ def find_msbuild():
     raw = download('https://github.com/kovidgoyal/bypy/raw/master/bypy/vcvars.py')
     open('vcvars.py', 'wb').write(raw)
     sys.path.insert(0, os.getcwd())
-    from vcvars import find_msbuild as ans
+    from vcvars import find_msbuild as ans, query_vcvarsall
+    vcvars_env = query_vcvarsall(True)
     del sys.path[0]
-    return ans()
+    vctools_ver = 'v' + vcvars_env['VCTOOLSVERSION'].replace('.', '')[:3]
+    return ans(), vctools_ver, vcvars_env['WINDOWSSDKVERSION'].strip('\\')
 
 
 def build_windows():
     PL = 'x64' if is64bit else 'Win32'
-    msbuild = find_msbuild()
+    msbuild, vctools_ver, sdk = find_msbuild()
     print('Using MSBuild:', msbuild)
-    replace_in_file(
-        'UnRARDll.vcxproj', '<WindowsTargetPlatformVersion>8.1</WindowsTargetPlatformVersion>', '<WindowsTargetPlatformVersion>10.0</WindowsTargetPlatformVersion>')
-    replace_in_file(
-        'UnRARDll.vcxproj', 'ToolsVersion="14.0"', 'ToolsVersion="Current"')
     subprocess.check_call([
-        msbuild, 'UnRARDll.vcxproj', '/t:Build', '/p:Platform=' + PL, '/p:Configuration=Release'])
+        msbuild, 'UnRARDll.vcxproj', '/t:Build', '/p:Platform=' + PL,
+        '/p:Configuration=Release',
+        '/p:PlatformToolset=' + vctools_ver,
+        '/p:WindowsTargetPlatformVersion=' + sdk,
+    ])
     lib = glob.glob('./build/*/Release/UnRAR.lib')[0]
     dll = glob.glob('./build/*/Release/UnRAR.dll')[0]
     shutil.copy2(lib, '../../lib')
