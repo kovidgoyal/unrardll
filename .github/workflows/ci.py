@@ -108,7 +108,9 @@ def build_windows():
     msbuild = find_msbuild()
     print('Using MSBuild:', msbuild)
     replace_in_file(
-        "UnRARDll.vcxproj", "<WindowsTargetPlatformVersion>8.1</WindowsTargetPlatformVersion>", "<WindowsTargetPlatformVersion>10.0</WindowsTargetPlatformVersion>")
+        'UnRARDll.vcxproj', '<WindowsTargetPlatformVersion>8.1</WindowsTargetPlatformVersion>', '<WindowsTargetPlatformVersion>10.0</WindowsTargetPlatformVersion>')
+    replace_in_file(
+        'UnRARDll.vcxproj', 'ToolsVersion="14.0"', 'ToolsVersion="Current"')
     subprocess.check_call([
         msbuild, 'UnRARDll.vcxproj', '/t:Build', '/p:Platform=' + PL, '/p:Configuration=Release'])
     lib = glob.glob('./build/*/Release/UnRAR.lib')[0]
