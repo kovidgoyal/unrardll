@@ -16,7 +16,7 @@ os.chdir(os.path.dirname(os.path.abspath(__file__)))
 
 raw = open('src/unrardll/__init__.py', 'rb').read().decode('utf-8')
 version = map(
-    int, re.search(r'^version = V\((\d+), (\d+), (\d+)', raw, flags=re.M).groups())
+    int, re.search(r"^str_version = '(.+?)'", raw, flags=re.M).group(1).split('.'))
 
 
 VERSION = '{}.{}.{}'.format(*version)
