@@ -145,6 +145,8 @@ def do_func(func, archive_path, f, c, *args):
         m = e.args[0]
         if m == 'ERAR_MISSING_PASSWORD':
             raise PasswordRequired(archive_path)
+        if m == 'ERAR_BAD_PASSWORD':
+            raise BadPassword(archive_path)
         if m == 'ERAR_BAD_DATA' and c.password_requested:
             raise (BadPassword if c.pw else PasswordRequired)(archive_path)
         raise
