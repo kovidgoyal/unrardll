@@ -477,6 +477,7 @@ initunrar(void)
     }
     UNRARError = st->error;
     if (PyModule_AddObject(module, "UNRARError", UNRARError) != 0) { INITERROR;}
+    Py_INCREF(UNRARError);
     if (PyModule_AddIntConstant(module, "RARDllVersion",  RARGetDllVersion()) != 0) { INITERROR; }
     if (PyModule_AddIntMacro(module, RAR_OM_LIST) != 0) { INITERROR; }
     if (PyModule_AddIntMacro(module, RAR_OM_EXTRACT) != 0) { INITERROR; }
